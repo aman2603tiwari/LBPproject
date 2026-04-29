@@ -1,0 +1,4 @@
+tool,f1_macro,accuracy
+GNN (ours),0.8927,0.9200
+Slither,0.0263,0.1200
+Mythril,0.0263,0.1200

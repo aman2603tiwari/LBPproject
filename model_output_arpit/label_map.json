@@ -1,0 +1,8 @@
+{
+  "0": "access_control",
+  "1": "integer_overflow",
+  "2": "logic_error",
+  "3": "other",
+  "4": "reentrancy",
+  "5": "safe"
+}

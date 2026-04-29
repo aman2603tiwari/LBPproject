@@ -1,0 +1,3155 @@
+text,label,label_id
+"/*
+ * @source: etherscan.io 
+ * @author: -
+ * @vulnerable_at_lines: 38
+ */
+
+pragma solidity ^0.4.19;
+
+contract PrivateBank
+{
+    mapping (address => uint) public balances;
+        
+    uint public MinDeposit = 1 ether;
+    
+    Log TransferLog;
+    
+    function PrivateBank(address _lib)
+    {
+        TransferLog = Log(_lib);
+    }
+    
+    function Deposit()
+    public
+    payable
+    {
+        if(msg.value >= MinDeposit)
+        {
+            balances[msg.sender]+=msg.value;
+            TransferLog.AddMessage(msg.sender,msg.value,""Deposit"");
+        }
+    }
+    
+    function CashOut(uint _am)
+    {
+        if(_am<=balances[msg.sender])
+        {            
+            // <yes> <report> REENTRANCY
+            if(msg.sender.call.value(_am)())
+            {
+                balances[msg.sender]-=_am;
+                TransferLog.AddMessage(msg.sender,_am,""CashOut"");
+            }
+        }
+    }
+    
+    function() public payable{}    
+    
+}
+
+contract Log 
+{
+   
+    struct Message
+    {
+        address Sender;
+        string  Data;
+        uint Val;
+        uint  Time;
+    }
+    
+    Message[] public History;
+    
+    Message LastMsg;
+    
+    function AddMessage(address _adr,uint _val,string _data)
+    public
+    {
+        LastMsg.Sender = _adr;
+        LastMsg.Time = now;
+        LastMsg.Val = _val;
+        LastMsg.Data = _data;
+        History.push(LastMsg);
+    }
+}",reentrancy,4
+"// security review
+/*
+ * @source: https://etherscan.io/address/0x741f1923974464efd0aa70e77800ba5d9ed18902#code
+ * @vulnerable_at_lines: 91
+ */
+
+pragma solidity ^0.4.19;
+/*
+ * This is a distributed lottery that chooses random addresses as lucky addresses. If these
+ * participate, they get the jackpot: 7 times the price of their bet.
+ * Of course one address can only win once. The owner regularly reseeds the secret
+ * seed of the contract (based on which the lucky addresses are chosen), so if you did not win,
+ * just wait for a reseed and try again!
+ *
+ * Jackpot chance:   1 in 8
+ * Ticket price: Anything larger than (or equal to) 0.1 ETH
+ * Jackpot size: 7 times the ticket price
+ *
+ * HOW TO PARTICIPATE: Just send any amount greater than (or equal to) 0.1 ETH to the contract's address
+ * Keep in mind that your address can only win once
+ *
+ * If the contract doesn't have enough ETH to pay the jackpot, it sends the whole balance.
+
+ https://www.reddit.com/r/ethdev/comments/7wp363/how_does_this_honeypot_work_it_seems_like_a/
+*/
+
+contract OpenAddressLottery{
+    struct SeedComponents{
+        uint component1;
+        uint component2;
+        uint component3;
+        uint component4;
+    }
+    
+    address owner; //address of the owner
+    uint private secretSeed; //seed used to calculate number of an address
+    uint private lastReseed; //last reseed - used to automatically reseed the contract every 1000 blocks
+    uint LuckyNumber = 7; //if the number of an address equals 7, it wins
+        
+    mapping (address => bool) winner; //keeping track of addresses that have already won
+    
+    function OpenAddressLottery() {
+        owner = msg.sender;
+        reseed(SeedComponents((uint)(block.coinbase), block.difficulty, block.gaslimit, block.timestamp)); //generate a quality random seed
+    }
+    
+    function participate() payable {
+        if(msg.value<0.1 ether)
+            return; //verify ticket price
+        
+        // make sure he hasn't won already
+        require(winner[msg.sender] == false);
+        
+        if(luckyNumberOfAddress(msg.sender) == LuckyNumber){ //check if it equals 7
+            winner[msg.sender] = true; // every address can only win once
+            
+            uint win=msg.value*7; //win = 7 times the ticket price
+            
+            if(win>this.balance) //if the balance isnt sufficient...
+                win=this.balance; //...send everything we've got
+            msg.sender.transfer(win);
+        }
+        
+        if(block.number-lastReseed>1000) //reseed if needed
+            reseed(SeedComponents((uint)(block.coinbase), block.difficulty, block.gaslimit, block.timestamp)); //generate a quality random seed
+    }
+    
+    function luckyNumberOfAddress(address addr) constant returns(uint n){
+        // calculate the number of current address - 1 in 8 chance
+        n = uint(keccak256(uint(addr), secretSeed)[0]) % 8;
+    }
+    
+    function reseed(SeedComponents components) internal {
+        secretSeed = uint256(keccak256(
+            c",other,3
+"// hevm: flattened sources of /nix/store/8xb41r4qd0cjb63wcrxf1qmfg88p0961-dss-6fd7de0/src/dai.sol
+
+pragma solidity =0.5.12;
+
+
+
+////// /nix/store/8xb41r4qd0cjb63wcrxf1qmfg88p0961-dss-6fd7de0/src/lib.sol
+
+// This program is free software: you can redistribute it and/or modify
+
+// it under the terms of the GNU General Public License as published by
+
+// the Free Software Foundation, either version 3 of the License, or
+
+// (at your option) any later version.
+
+
+
+// This program is distributed in the hope that it will be useful,
+
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+
+// GNU General Public License for more details.
+
+
+
+// You should have received a copy of the GNU General Public License
+
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+
+/* pragma solidity 0.5.12; */
+
+
+
+contract LibNote {
+
+    event LogNote(
+
+        bytes4   indexed  sig,
+
+        address  indexed  usr,
+
+        bytes32  indexed  arg1,
+
+        bytes32  indexed  arg2,
+
+        bytes             data
+
+    ) anonymous;
+
+
+
+    modifier note {
+
+        _;
+
+        assembly {
+
+            // log an 'anonymous' event with a constant 6 words of calldata
+
+            // and four indexed topics: selector, caller, arg1 and arg2
+
+            let mark := msize                         // end of memory ensures zero
+
+            mstore(0x40, add(mark, 288))              // update free memory pointer
+
+            mstore(mark, 0x20)                        // bytes type data offset
+
+            mstore(add(mark, 0x20), 224)              // bytes size (padded)
+
+            calldatacopy(add(mark, 0x40), 0, 224)     // bytes payload
+
+            log4(mark, 288,                           // calldata
+
+                 shl(224, shr(224, calldataload(0))), // msg.sig
+
+                 caller,                              // msg.sender
+
+                 calldataload(4),                     // arg1
+
+                 calldataload(36)                     // arg2
+
+                )
+
+        }
+
+    }
+
+}
+
+
+
+////// /nix/store/8xb41r4qd0cjb63wcrxf1qmfg88p0961-dss-6fd7de0/src/dai.sol
+
+// Copyright (C) 2017, 2018, 2019 dbrock, rain, mrchico
+
+
+
+// This program is free software: you can redistribute it and/or modify
+
+// it under the terms of the GNU Affero General Public License as published by
+
+// the Free Software Foundation, either version 3 of the License, or
+
+// (at your option) any later version.
+
+//
+
+// This program is distributed in the hope that it will be useful,
+
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+
+// GNU Affero General Public License for more details.
+
+//
+
+// You should have received a copy of the GNU Affero General Public License
+
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
+
+/* pragma solidity 0.5.12; */
+
+
+
+/* import ""./lib.sol""; */
+
+
+
+contract Dai is LibNote {
+
+    //",safe,5
+"
+
+pragma solidity ^0.5.8;
+
+interface ComptrollerInterface {
+    /**
+     * @notice Marker function used for light validation when updating the comptroller of a market
+     * @dev Implementations should simply return true.
+     * @return true
+     */
+    function isComptroller() external view returns (bool);
+
+    /*** Assets You Are In ***/
+
+    function enterMarkets(address[] calldata cTokens) external returns (uint[] memory);
+    function exitMarket(address cToken) external returns (uint);
+
+    /*** Policy Hooks ***/
+
+    function mintAllowed(address cToken, address minter, uint mintAmount) external returns (uint);
+    function mintVerify(address cToken, address minter, uint mintAmount, uint mintTokens) external;
+
+    function redeemAllowed(address cToken, address redeemer, uint redeemTokens) external returns (uint);
+    function redeemVerify(address cToken, address redeemer, uint redeemAmount, uint redeemTokens) external;
+
+    function borrowAllowed(address cToken, address borrower, uint borrowAmount) external returns (uint);
+    function borrowVerify(address cToken, address borrower, uint borrowAmount) external;
+
+    function repayBorrowAllowed(
+        address cToken,
+        address payer,
+        address borrower,
+        uint repayAmount) external returns (uint);
+    function repayBorrowVerify(
+        address cToken,
+        address payer,
+        address borrower,
+        uint repayAmount,
+        uint borrowerIndex) external;
+
+    function liquidateBorrowAllowed(
+        address cTokenBorrowed,
+        address cTokenCollateral,
+        address liquidator,
+        address borrower,
+        uint repayAmount) external returns (uint);
+    function liquidateBorrowVerify(
+        address cTokenBorrowed,
+        address cTokenCollateral,
+        address liquidator,
+        address borrower,
+        uint repayAmount,
+        uint seizeTokens) external;
+
+    function seizeAllowed(
+        address cTokenCollateral,
+        address cTokenBorrowed,
+        address liquidator,
+        address borrower,
+        uint seizeTokens) external returns (uint);
+    function seizeVerify(
+        address cTokenCollateral,
+        address cTokenBorrowed,
+        address liquidator,
+        address borrower,
+        uint seizeTokens) external;
+
+    function transferAllowed(address cToken, address src, address dst, uint transferTokens) external returns (uint);
+    function transferVerify(address cToken, address src, address dst, uint transferTokens) external;
+
+    /*** Liquidity/Liquidation Calculations ***/
+
+    function liquidateCalculateSeizeTokens(
+        address cTokenBorrowed,
+        address cTokenCollateral,
+        uint repayAmount) external view returns (uint, uint);
+}
+
+
+
+pragma solidity ^0.5.8;
+
+contract ComptrollerErrorReporter {
+    enum Error {
+        NO_ERROR,
+        UNAUTHORIZED,
+        COMPTROLLER_MISMATCH,
+        INSUFFICIENT_SHORTFALL,
+        INSUFFICIENT_LIQUI",safe,5
+"/*
+ * @source: https://github.com/trailofbits/not-so-smart-contracts/blob/master/wrong_constructor_name/incorrect_constructor.sol
+ * @author: Ben Perez
+ * @vulnerable_at_lines: 20
+ */
+
+pragma solidity ^0.4.24;
+
+contract Missing{
+    address private admin;
+
+    modifier onlyowner {
+        require(msg.sender==admin);
+        _;
+    }
+
+    // The name of the constructor should be Missing
+    // Anyone can call the IamMissing once the contract is deployed
+    // <yes> <report> ACCESS_CONTROL
+    function IamMissing()
+        public
+    {
+        admin = msg.sender;
+    }
+
+    function () payable {}
+
+    function withdraw()
+        public
+        onlyowner
+    {
+       admin.transfer(this.amount);
+    }
+}
+",access_control,0
+"/*
+ * @source: etherscan.io 
+ * @author: -
+ * @vulnerable_at_lines: 29
+ */
+
+pragma solidity ^0.4.25;
+
+contract MY_BANK
+{
+    function Put(uint _unlockTime)
+    public
+    payable
+    {
+        var acc = Acc[msg.sender];
+        acc.balance += msg.value;
+        acc.unlockTime = _unlockTime>now?_unlockTime:now;
+        LogFile.AddMessage(msg.sender,msg.value,""Put"");
+    }
+
+    function Collect(uint _am)
+    public
+    payable
+    {
+        var acc = Acc[msg.sender];
+        if( acc.balance>=MinSum && acc.balance>=_am && now>acc.unlockTime)
+        {
+            // <yes> <report> REENTRANCY
+            if(msg.sender.call.value(_am)())
+            {
+                acc.balance-=_am;
+                LogFile.AddMessage(msg.sender,_am,""Collect"");
+            }
+        }
+    }
+
+    function() 
+    public 
+    payable
+    {
+        Put(0);
+    }
+
+    struct Holder   
+    {
+        uint unlockTime;
+        uint balance;
+    }
+
+    mapping (address => Holder) public Acc;
+
+    Log LogFile;
+
+    uint public MinSum = 1 ether;    
+
+    function MY_BANK(address log) public{
+        LogFile = Log(log);
+    }
+}
+
+
+contract Log 
+{
+    struct Message
+    {
+        address Sender;
+        string  Data;
+        uint Val;
+        uint  Time;
+    }
+
+    Message[] public History;
+
+    Message LastMsg;
+
+    function AddMessage(address _adr,uint _val,string _data)
+    public
+    {
+        LastMsg.Sender = _adr;
+        LastMsg.Time = now;
+        LastMsg.Val = _val;
+        LastMsg.Data = _data;
+        History.push(LastMsg);
+    }
+}",reentrancy,4
+"
+pragma solidity >=0.6.11;
+
+
+import {Address} from ""@openzeppelin/contracts/utils/Address.sol"";
+
+/**
+ * @title UpgradeBeaconProxy
+ * @notice
+ * Proxy contract which delegates all logic, including initialization,
+ * to an implementation contract.
+ * The implementation contract is stored within an Upgrade Beacon contract;
+ * the implementation contract can be changed by performing an upgrade on the Upgrade Beacon contract.
+ * The Upgrade Beacon contract for this Proxy is immutably specified at deployment.
+ * @dev This implementation combines the gas savings of keeping the UpgradeBeacon address outside of contract storage
+ * found in 0age's implementation:
+ * https:
+ * With the added safety checks that the UpgradeBeacon and implementation are contracts at time of deployment
+ * found in OpenZeppelin's implementation:
+ * https:
+ */
+contract UpgradeBeaconProxy {
+    
+
+    
+    address private immutable upgradeBeacon;
+
+    
+
+    /**
+     * @notice Validate that the Upgrade Beacon is a contract, then set its
+     * address immutably within this contract.
+     * Validate that the implementation is also a contract,
+     * Then call the initialization function defined at the implementation.
+     * The deployment will revert and pass along the
+     * revert reason if the initialization function reverts.
+     * @param _upgradeBeacon Address of the Upgrade Beacon to be stored immutably in the contract
+     * @param _initializationCalldata Calldata supplied when calling the initialization function
+     */
+    constructor(address _upgradeBeacon, bytes memory _initializationCalldata)
+        payable
+    {
+        
+        require(Address.isContract(_upgradeBeacon), ""beacon !contract"");
+        
+        upgradeBeacon = _upgradeBeacon;
+        
+        address _implementation = _getImplementation(_upgradeBeacon);
+        require(
+            Address.isContract(_implementation),
+            ""beacon implementation !contract""
+        );
+        
+        if (_initializationCalldata.length > 0) {
+            _initialize(_implementation, _initializationCalldata);
+        }
+    }
+
+    
+
+    /**
+     * @notice Forwards all calls with data to _fallback()
+     * No public functions are declared on the contract, so all calls hit fallback
+     */
+    fallback() external payable {
+        _fallback();
+    }
+
+    /**
+     * @notic",other,3
+"/*
+ * @source: etherscan.io 
+ * @author: -
+ * @vulnerable_at_lines: 63
+ */
+
+pragma solidity ^0.4.19;
+
+contract MONEY_BOX   
+{
+    struct Holder   
+    {
+        uint unlockTime;
+        uint balance;
+    }
+    
+    mapping (address => Holder) public Acc;
+    
+    uint public MinSum;
+    
+    Log LogFile;
+    
+    bool intitalized;
+    
+    function SetMinSum(uint _val)
+    public
+    {
+        if(intitalized)throw;
+        MinSum = _val;
+    }
+    
+    function SetLogFile(address _log)
+    public
+    {
+        if(intitalized)throw;
+        LogFile = Log(_log);
+    }
+    
+    function Initialized()
+    public
+    {
+        intitalized = true;
+    }
+    
+    function Put(uint _lockTime)
+    public
+    payable
+    {
+        var acc = Acc[msg.sender];
+        acc.balance += msg.value;
+        if(now+_lockTime>acc.unlockTime)acc.unlockTime=now+_lockTime;
+        LogFile.AddMessage(msg.sender,msg.value,""Put"");
+    }
+    
+    function Collect(uint _am)
+    public
+    payable
+    {
+        var acc = Acc[msg.sender];
+        if( acc.balance>=MinSum && acc.balance>=_am && now>acc.unlockTime)
+        {
+            // <yes> <report> REENTRANCY
+            if(msg.sender.call.value(_am)())
+            {
+                acc.balance-=_am;
+                LogFile.AddMessage(msg.sender,_am,""Collect"");
+            }
+        }
+    }
+    
+    function() 
+    public 
+    payable
+    {
+        Put(0);
+    }
+    
+}
+
+
+contract Log 
+{
+    struct Message
+    {
+        address Sender;
+        string  Data;
+        uint Val;
+        uint  Time;
+    }
+    
+    Message[] public History;
+    
+    Message LastMsg;
+    
+    function AddMessage(address _adr,uint _val,string _data)
+    public
+    {
+        LastMsg.Sender = _adr;
+        LastMsg.Time = now;
+        LastMsg.Val = _val;
+        LastMsg.Data = _data;
+        History.push(LastMsg);
+    }
+}",reentrancy,4
+"/*
+ * @source: https://github.com/SmartContractSecurity/SWC-registry/blob/master/test_cases/dos_gas_limit/dos_address.sol
+ * @author: -
+ * @vulnerable_at_lines: 16,17,18
+ */
+
+pragma solidity ^0.4.25;
+
+contract DosGas {
+
+    address[] creditorAddresses;
+    bool win = false;
+
+    function emptyCreditors() public {
+        // <yes> <report> DENIAL_OF_SERVICE
+        if(creditorAddresses.length>1500) {
+            creditorAddresses = new address[](0);
+            win = true;
+        }
+    }
+
+    function addCreditors() public returns (bool) {
+        for(uint i=0;i<350;i++) {
+          creditorAddresses.push(msg.sender);
+        }
+        return true;
+    }
+
+    function iWin() public view returns (bool) {
+        return win;
+    }
+
+    function numberCreditors() public view returns (uint) {
+        return creditorAddresses.length;
+    }
+}
+",logic_error,2
+"/*
+ * @source: https://github.com/trailofbits/not-so-smart-contracts/blob/master/reentrancy/SpankChain_source_code/SpankChain_Payment.sol
+ * @author: -
+ * @vulnerable_at_lines: 426,430
+ */
+
+ // https://etherscan.io/address/0xf91546835f756da0c10cfa0cda95b15577b84aa7#code
+
+ pragma solidity ^0.4.23;
+ // produced by the Solididy File Flattener (c) David Appleton 2018
+ // contact : dave@akomba.com
+ // released under Apache 2.0 licence
+ contract Token {
+     /* This is a slight change to the ERC20 base standard.
+     function totalSupply() constant returns (uint256 supply);
+     is replaced with:
+     uint256 public totalSupply;
+     This automatically creates a getter function for the totalSupply.
+     This is moved to the base contract since public getter functions are not
+     currently recognised as an implementation of the matching abstract
+     function by the compiler.
+     */
+     /// total amount of tokens
+     uint256 public totalSupply;
+
+     /// @param _owner The address from which the balance will be retrieved
+     /// @return The balance
+     function balanceOf(address _owner) public constant returns (uint256 balance);
+
+     /// @notice send `_value` token to `_to` from `msg.sender`
+     /// @param _to The address of the recipient
+     /// @param _value The amount of token to be transferred
+     /// @return Whether the transfer was successful or not
+     function transfer(address _to, uint256 _value) public returns (bool success);
+
+     /// @notice send `_value` token to `_to` from `_from` on the condition it is approved by `_from`
+     /// @param _from The address of the sender
+     /// @param _to The address of the recipient
+     /// @param _value The amount of token to be transferred
+     /// @return Whether the transfer was successful or not
+     function transferFrom(address _from, address _to, uint256 _value) public returns (bool success);
+
+     /// @notice `msg.sender` approves `_spender` to spend `_value` tokens
+     /// @param _spender The address of the account able to transfer the tokens
+     /// @param _value The amount of tokens to be approved for transfer
+     /// @return Whether the approval was successful or not
+     function approve(address _spender, uint256 _value) public returns (bool success);
+
+     /// @param _owner The address of the account owning tokens
+     /// @param _spender The address of the account able to transfer the tokens
+     /// @return Amount of remaining tokens allowed to spent
+     function allowance(address _owner, address _spender) public constant returns (uint256 remaining);
+
+     event Transfer(address indexed _from, address indexed _to, uint256 _value);
+     event Approval(address indexed _owner, address indexed _spender, uint256 _value);
+ }
+
+ library ECTools {
+
+     // @dev Recovers the address which has signed a message
+     // @thanks https://gist.github.com/axic/5b33912c6f61ae6fd96d6c4a47afde6d
+     function recoverSigner(bytes32 _hashedMsg, string _sig) public pure returns (address) {
+     ",reentrancy,4
+"/*
+ * @source: etherscan.io 
+ * @author: -
+ * @vulnerable_at_lines: 14
+ */
+
+pragma solidity ^0.4.24;
+
+contract Proxy  {
+    modifier onlyOwner { if (msg.sender == Owner) _; } address Owner = msg.sender;
+    function transferOwner(address _owner) public onlyOwner { Owner = _owner; } 
+    function proxy(address target, bytes data) public payable {
+        // <yes> <report> UNCHECKED_LL_CALLS
+        target.call.value(msg.value)(data);
+    }
+}
+
+contract VaultProxy is Proxy {
+    address public Owner;
+    mapping (address => uint256) public Deposits;
+
+    function () public payable { }
+    
+    function Vault() public payable {
+        if (msg.sender == tx.origin) {
+            Owner = msg.sender;
+            deposit();
+        }
+    }
+    
+    function deposit() public payable {
+        if (msg.value > 0.5 ether) {
+            Deposits[msg.sender] += msg.value;
+        }
+    }
+    
+    function withdraw(uint256 amount) public onlyOwner {
+        if (amount>0 && Deposits[msg.sender]>=amount) {
+            msg.sender.transfer(amount);
+        }
+    }
+}",logic_error,2
+"// security review
+pragma solidity =0.5.16;
+
+
+
+interface IUniswapV2Factory {
+
+    event PairCreated(address indexed token0, address indexed token1, address pair, uint);
+
+
+
+    function feeTo() external view returns (address);
+
+    function feeToSetter() external view returns (address);
+
+
+
+    function getPair(address tokenA, address tokenB) external view returns (address pair);
+
+    function allPairs(uint) external view returns (address pair);
+
+    function allPairsLength() external view returns (uint);
+
+
+
+    function createPair(address tokenA, address tokenB) external returns (address pair);
+
+
+
+    function setFeeTo(address) external;
+
+    function setFeeToSetter(address) external;
+
+}
+
+
+
+interface IUniswapV2Pair {
+
+    event Approval(address indexed owner, address indexed spender, uint value);
+
+    event Transfer(address indexed from, address indexed to, uint value);
+
+
+
+    function name() external pure returns (string memory);
+
+    function symbol() external pure returns (string memory);
+
+    function decimals() external pure returns (uint8);
+
+    function totalSupply() external view returns (uint);
+
+    function balanceOf(address owner) external view returns (uint);
+
+    function allowance(address owner, address spender) external view returns (uint);
+
+
+
+    function approve(address spender, uint value) external returns (bool);
+
+    function transfer(address to, uint value) external returns (bool);
+
+    function transferFrom(address from, address to, uint value) external returns (bool);
+
+
+
+    function DOMAIN_SEPARATOR() external view returns (bytes32);
+
+    function PERMIT_TYPEHASH() external pure returns (bytes32);
+
+    function nonces(address owner) external view returns (uint);
+
+
+
+    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external;
+
+
+
+    event Mint(address indexed sender, uint amount0, uint amount1);
+
+    event Burn(address indexed sender, uint amount0, uint amount1, address indexed to);
+
+    event Swap(
+
+        address indexed sender,
+
+        uint amount0In,
+
+        uint amount1In,
+
+        uint amount0Out,
+
+        uint amount1Out,
+
+        address indexed to
+
+    );
+
+    event Sync(uint112 reserve0, uint112 reserve1);
+
+
+
+    function MINIMUM_LIQUIDITY() external pure returns (uint);
+
+    function factory() external view returns (address);
+
+    function token0() external view returns (address);
+
+    function token1() external view returns (address);
+
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+
+    function price0CumulativeLast() external view returns (uint);
+
+    function price1CumulativeLast() external view returns (uint);
+
+    function kLast() external view returns (uint);
+
+
+
+    function mint(address to) external returns (uint liquidity);
+
+    function burn(address to) external returns (uint amount0, uint amount1);
+
+    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
+
+  ",safe,5
+"
+
+pragma solidity ^0.5.8;
+
+contract ComptrollerErrorReporter {
+    enum Error {
+        NO_ERROR,
+        UNAUTHORIZED,
+        COMPTROLLER_MISMATCH,
+        INSUFFICIENT_SHORTFALL,
+        INSUFFICIENT_LIQUIDITY,
+        INVALID_CLOSE_FACTOR,
+        INVALID_COLLATERAL_FACTOR,
+        INVALID_LIQUIDATION_INCENTIVE,
+        MARKET_NOT_ENTERED,
+        MARKET_NOT_LISTED,
+        MARKET_ALREADY_LISTED,
+        MATH_ERROR,
+        NONZERO_BORROW_BALANCE,
+        PRICE_ERROR,
+        REJECTION,
+        SNAPSHOT_ERROR,
+        TOO_MANY_ASSETS,
+        TOO_MUCH_REPAY
+    }
+
+    enum FailureInfo {
+        ACCEPT_ADMIN_PENDING_ADMIN_CHECK,
+        ACCEPT_PENDING_IMPLEMENTATION_ADDRESS_CHECK,
+        EXIT_MARKET_BALANCE_OWED,
+        EXIT_MARKET_REJECTION,
+        SET_CLOSE_FACTOR_OWNER_CHECK,
+        SET_CLOSE_FACTOR_VALIDATION,
+        SET_COLLATERAL_FACTOR_OWNER_CHECK,
+        SET_COLLATERAL_FACTOR_NO_EXISTS,
+        SET_COLLATERAL_FACTOR_VALIDATION,
+        SET_COLLATERAL_FACTOR_WITHOUT_PRICE,
+        SET_IMPLEMENTATION_OWNER_CHECK,
+        SET_LIQUIDATION_INCENTIVE_OWNER_CHECK,
+        SET_LIQUIDATION_INCENTIVE_VALIDATION,
+        SET_MAX_ASSETS_OWNER_CHECK,
+        SET_PENDING_ADMIN_OWNER_CHECK,
+        SET_PENDING_IMPLEMENTATION_OWNER_CHECK,
+        SET_PRICE_ORACLE_OWNER_CHECK,
+        SUPPORT_MARKET_EXISTS,
+        SUPPORT_MARKET_OWNER_CHECK,
+        ZUNUSED
+    }
+
+    /**
+      * @dev `error` corresponds to enum Error; `info` corresponds to enum FailureInfo, and `detail` is an arbitrary
+      * contract-specific code that enables us to report opaque error codes from upgradeable contracts.
+      **/
+    event Failure(uint error, uint info, uint detail);
+
+    /**
+      * @dev use this when reporting a known error from the money market or a non-upgradeable collaborator
+      */
+    function fail(Error err, FailureInfo info) internal returns (uint) {
+        emit Failure(uint(err), uint(info), 0);
+
+        return uint(err);
+    }
+
+    /**
+      * @dev use this when reporting an opaque error from an upgradeable collaborator contract
+      */
+    function failOpaque(Error err, FailureInfo info, uint opaqueError) internal returns (uint) {
+        emit Failure(uint(err), uint(info), opaqueError);
+
+        return uint(err);
+    }
+}
+
+contract TokenErrorReporter {
+    enum Error {
+        NO_ERROR,
+        UNAUTHORIZED,
+        BAD_INPUT,
+        COMPTROLLER_REJECTION,
+        COMPTROLLER_CALCULATION_ERROR,
+        INTEREST_RATE_MODEL_ERROR,
+        INVALID_ACCOUNT_PAIR,
+        INVALID_CLOSE_AMOUNT_REQUESTED,
+        INVALID_COLLATERAL_FACTOR,
+        MATH_ERROR,
+        MARKET_NOT_FRESH,
+        MARKET_NOT_LISTED,
+        TOKEN_INSUFFICIENT_ALLOWANCE,
+        TOKEN_INSUFFICIENT_BALANCE,
+        TOKEN_INSUFFICIENT_CASH,
+        TOKEN_TRANSFER_IN_FAILED,
+        TOKEN_TRANSFER_OUT_FAILED
+    }
+
+    /*
+     * Note: FailureInfo (but not Error) is kept in alphabetical order
+     *       This is because FailureInfo grows sig",other,3
+"/*
+ * @source: https://github.com/SmartContractSecurity/SWC-registry/blob/master/test_cases/transaction_order_dependence/ERC20.sol
+ * @author: -
+ * @vulnerable_at_lines: 110,113
+ */
+
+pragma solidity ^0.4.24;
+
+/** Taken from the OpenZeppelin github
+ * @title SafeMath
+ * @dev Math operations with safety checks that revert on error
+ */
+library SafeMath {
+
+  /**
+  * @dev Multiplies two numbers, reverts on overflow.
+  */
+  function mul(uint256 a, uint256 b) internal pure returns (uint256) {
+    // Gas optimization: this is cheaper than requiring 'a' not being zero, but the
+    // benefit is lost if 'b' is also tested.
+    // See: https://github.com/OpenZeppelin/openzeppelin-solidity/pull/522
+    if (a == 0) {
+      return 0;
+    }
+
+    uint256 c = a * b;
+    require(c / a == b);
+
+    return c;
+  }
+
+  /**
+  * @dev Integer division of two numbers truncating the quotient, reverts on division by zero.
+  */
+  function div(uint256 a, uint256 b) internal pure returns (uint256) {
+    require(b > 0); // Solidity only automatically asserts when dividing by 0
+    uint256 c = a / b;
+    // assert(a == b * c + a % b); // There is no case in which this doesn't hold
+
+    return c;
+  }
+
+  /**
+  * @dev Subtracts two numbers, reverts on overflow (i.e. if subtrahend is greater than minuend).
+  */
+  function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+    require(b <= a);
+    uint256 c = a - b;
+
+    return c;
+  }
+
+  /**
+  * @dev Adds two numbers, reverts on overflow.
+  */
+  function add(uint256 a, uint256 b) internal pure returns (uint256) {
+    uint256 c = a + b;
+    require(c >= a);
+
+    return c;
+  }
+
+  /**
+  * @dev Divides two numbers and returns the remainder (unsigned integer modulo),
+  * reverts when dividing by zero.
+  */
+  function mod(uint256 a, uint256 b) internal pure returns (uint256) {
+    require(b != 0);
+    return a % b;
+  }
+}
+
+
+contract ERC20 {
+
+  event Transfer( address indexed from, address indexed to, uint256 value );
+  event Approval( address indexed owner, address indexed spender, uint256 value);
+  using SafeMath for *;
+
+  mapping (address => uint256) private _balances;
+
+  mapping (address => mapping (address => uint256)) private _allowed;
+
+  uint256 private _totalSupply;
+
+  constructor(uint totalSupply){
+    _balances[msg.sender] = totalSupply;
+  }
+
+  function balanceOf(address owner) public view returns (uint256) {
+    return _balances[owner];
+  }
+
+
+  function allowance(address owner, address spender) public view returns (uint256)
+  {
+    return _allowed[owner][spender];
+  }
+
+  function transfer(address to, uint256 value) public returns (bool) {
+    require(value <= _balances[msg.sender]);
+    require(to != address(0));
+
+    _balances[msg.sender] = _balances[msg.sender].sub(value);
+    _balances[to] = _balances[to].add(value);
+    emit Transfer(msg.sender, to, value);
+    return true;
+  }
+  // <yes> <report> FRONT_RUNNING
+  function approve(address spender, uint256 value) public returns (bool) {
+    require(spender != address(0));",logic_error,2
+"/*
+ * @source: http://blockchain.unica.it/projects/ethereum-survey/attacks.html#governmental
+ * @author: -
+ * @vulnerable_at_lines: 27
+ */
+
+//added pragma version
+pragma solidity ^0.4.0;
+
+contract Governmental {
+  address public owner;
+  address public lastInvestor;
+  uint public jackpot = 1 ether;
+  uint public lastInvestmentTimestamp;
+  uint public ONE_MINUTE = 1 minutes;
+
+  function Governmental() {
+    owner = msg.sender;
+    if (msg.value<1 ether) throw;
+  }
+
+  function invest() {
+    if (msg.value<jackpot/2) throw;
+    lastInvestor = msg.sender;
+    jackpot += msg.value/2;
+    // <yes> <report> TIME_MANIPULATION
+    lastInvestmentTimestamp = block.timestamp;
+  }
+
+  function resetInvestment() {
+    if (block.timestamp < lastInvestmentTimestamp+ONE_MINUTE)
+      throw;
+
+    lastInvestor.send(jackpot);
+    owner.send(this.balance-1 ether);
+
+    lastInvestor = 0;
+    jackpot = 1 ether;
+    lastInvestmentTimestamp = 0;
+  }
+}
+
+contract Attacker {
+
+  function attack(address target, uint count) {
+    if (0<=count && count<1023) {
+      this.attack.gas(msg.gas-2000)(target, count+1);
+    }
+    else {
+      Governmental(target).resetInvestment();
+    }
+  }
+}
+",logic_error,2
+"// solidity code
+// contracts/Wormhole.sol
+// SPDX-License-Identifier: Apache 2
+
+pragma solidity ^0.8.0;
+
+import ""@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol"";
+
+contract Wormhole is ERC1967Proxy {
+    constructor (address implementation, bytes memory initData) ERC1967Proxy(
+        implementation,
+        initData
+    ) { }
+}
+
+// ===== NEXT FILE =====
+
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+import ""../Proxy.sol"";
+import ""./ERC1967Upgrade.sol"";
+
+/**
+ * @dev This contract implements an upgradeable proxy. It is upgradeable because calls are delegated to an
+ * implementation address that can be changed. This address is stored in storage in the location specified by
+ * https://eips.ethereum.org/EIPS/eip-1967[EIP1967], so that it doesn't conflict with the storage layout of the
+ * implementation behind the proxy.
+ */
+contract ERC1967Proxy is Proxy, ERC1967Upgrade {
+    /**
+     * @dev Initializes the upgradeable proxy with an initial implementation specified by `_logic`.
+     *
+     * If `_data` is nonempty, it's used as data in a delegate call to `_logic`. This will typically be an encoded
+     * function call, and allows initializating the storage of the proxy like a Solidity constructor.
+     */
+    constructor(address _logic, bytes memory _data) payable {
+        assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256(""eip1967.proxy.implementation"")) - 1));
+        _upgradeToAndCall(_logic, _data, false);
+    }
+
+    /**
+     * @dev Returns the current implementation address.
+     */
+    function _implementation() internal view virtual override returns (address impl) {
+        return ERC1967Upgrade._getImplementation();
+    }
+}
+
+
+// ===== NEXT FILE =====
+
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.2;
+
+import ""../beacon/IBeacon.sol"";
+import ""../../utils/Address.sol"";
+import ""../../utils/StorageSlot.sol"";
+
+/**
+ * @dev This abstract contract provides getters and event emitting update functions for
+ * https://eips.ethereum.org/EIPS/eip-1967[EIP1967] slots.
+ *
+ * _Available since v4.1._
+ *
+ * @custom:oz-upgrades-unsafe-allow delegatecall
+ */
+abstract contract ERC1967Upgrade {
+    // This is the keccak-256 hash of ""eip1967.proxy.rollback"" subtracted by 1
+    bytes32 private constant _ROLLBACK_SLOT = 0x4910fdfa16fed3260ed0e7147f7cc6da11a60208b5b9406d12a635614ffd9143;
+
+    /**
+     * @dev Storage slot with the address of the current implementation.
+     * This is the keccak-256 hash of ""eip1967.proxy.implementation"" subtracted by 1, and is
+     * validated in the constructor.
+     */
+    bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+
+    /**
+     * @dev Emitted when the implementation is upgraded.
+     */
+    event Upgraded(address indexed implementation);
+
+    /**
+     * @dev Returns the current implementation address.
+     */
+    function _getImplementation() internal view returns (address) {
+        return StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value;",other,3
+"contract Exchange():
+
+    def setup(token_addr: address): modifying
+
+
+
+NewExchange: event({token: indexed(address), exchange: indexed(address)})
+
+
+
+exchangeTemplate: public(address)
+
+tokenCount: public(uint256)
+
+token_to_exchange: address[address]
+
+exchange_to_token: address[address]
+
+id_to_token: address[uint256]
+
+
+
+@public
+
+def initializeFactory(template: address):
+
+    assert self.exchangeTemplate == ZERO_ADDRESS
+
+    assert template != ZERO_ADDRESS
+
+    self.exchangeTemplate = template
+
+
+
+@public
+
+def createExchange(token: address) -> address:
+
+    assert token != ZERO_ADDRESS
+
+    assert self.exchangeTemplate != ZERO_ADDRESS
+
+    assert self.token_to_exchange[token] == ZERO_ADDRESS
+
+    exchange: address = create_with_code_of(self.exchangeTemplate)
+
+    Exchange(exchange).setup(token)
+
+    self.token_to_exchange[token] = exchange
+
+    self.exchange_to_token[exchange] = token
+
+    token_id: uint256 = self.tokenCount + 1
+
+    self.tokenCount = token_id
+
+    self.id_to_token[token_id] = token
+
+    log.NewExchange(token, exchange)
+
+    return exchange
+
+
+
+@public
+
+@constant
+
+def getExchange(token: address) -> address:
+
+    return self.token_to_exchange[token]
+
+
+
+@public
+
+@constant
+
+def getToken(exchange: address) -> address:
+
+    return self.exchange_to_token[exchange]
+
+
+
+@public
+
+@constant
+
+def getTokenWithId(token_id: uint256) -> address:
+
+    return self.id_to_token[token_id]",reentrancy,4
+"// File: contracts/uniswapv2/interfaces/IUniswapV2Pair.sol
+
+
+
+pragma solidity >=0.5.0;
+
+
+
+interface IUniswapV2Pair {
+
+    event Approval(address indexed owner, address indexed spender, uint value);
+
+    event Transfer(address indexed from, address indexed to, uint value);
+
+
+
+    function name() external pure returns (string memory);
+
+    function symbol() external pure returns (string memory);
+
+    function decimals() external pure returns (uint8);
+
+    function totalSupply() external view returns (uint);
+
+    function balanceOf(address owner) external view returns (uint);
+
+    function allowance(address owner, address spender) external view returns (uint);
+
+
+
+    function approve(address spender, uint value) external returns (bool);
+
+    function transfer(address to, uint value) external returns (bool);
+
+    function transferFrom(address from, address to, uint value) external returns (bool);
+
+
+
+    function DOMAIN_SEPARATOR() external view returns (bytes32);
+
+    function PERMIT_TYPEHASH() external pure returns (bytes32);
+
+    function nonces(address owner) external view returns (uint);
+
+
+
+    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external;
+
+
+
+    event Mint(address indexed sender, uint amount0, uint amount1);
+
+    event Burn(address indexed sender, uint amount0, uint amount1, address indexed to);
+
+    event Swap(
+
+        address indexed sender,
+
+        uint amount0In,
+
+        uint amount1In,
+
+        uint amount0Out,
+
+        uint amount1Out,
+
+        address indexed to",safe,5
+"// File: contracts/uniswapv2/interfaces/IUniswapV2Pair.sol
+
+
+
+pragma solidity >=0.5.0;
+
+
+
+interface IUniswapV2Pair {
+
+    event Approval(address indexed owner, address indexed spender, uint value);
+
+    event Transfer(address indexed from, address indexed to, uint value);
+
+
+
+    function name() external pure returns (string memory);
+
+    function symbol() external pure returns (string memory);
+
+    function decimals() external pure returns (uint8);
+
+    function totalSupply() external view returns (uint);
+
+    function balanceOf(address owner) external view returns (uint);
+
+    function allowance(address owner, address spender) external view returns (uint);
+
+
+
+    function approve(address spender, uint value) external returns (bool);
+
+    function transfer(address to, uint value) external returns (bool);
+
+    function transferFrom(address from, address to, uint value) external returns (bool);
+
+
+
+    function DOMAIN_SEPARATOR() external view returns (bytes32);
+
+    function PERMIT_TYPEHASH() external pure returns (bytes32);
+
+    function nonces(address owner) external view returns (uint);
+
+
+
+    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external;
+
+
+
+    event Mint(address indexed sender, uint amount0, uint amount1);
+
+    event Burn(address indexed sender, uint amount0, uint amount1, address indexed to);
+
+    event Swap(
+
+        address indexed sender,
+
+        uint amount0In,
+
+        uint amount1In,
+
+        uint amount0Out,
+
+        uint amount1Out,
+
+        address indexed to
+
+    );
+
+    event Sync(uint112 reserve0, uint112 reserve1);
+
+
+
+    function MINIMUM_LIQUIDITY() external pure returns (uint);
+
+    function factory() external view returns (address);
+
+    function token0() external view returns (address);
+
+    function token1() external view returns (address);
+
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+
+    function price0CumulativeLast() external view returns (uint);
+
+    function price1CumulativeLast() external view returns (uint);
+
+    function kLast() external view returns (uint);
+
+
+
+    function mint(address to) external returns (uint liquidity);
+
+    function burn(address to) external returns (uint amount0, uint amount1);
+
+    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
+
+    function skim(address to) external;
+
+    function sync() external;
+
+
+
+    function initialize(address, address) external;
+
+}
+
+
+
+// File: contracts/uniswapv2/libraries/SafeMath.sol
+
+
+
+pragma solidity =0.6.12;
+
+
+
+// a library for performing overflow-safe math, courtesy of DappHub (https://github.com/dapphub/ds-math)
+
+
+
+library SafeMathUniswap {
+
+    function add(uint x, uint y) internal pure returns (uint z) {
+
+        require((z = x + y) >= x, 'ds-math-add-overflow');
+
+    }
+
+
+
+    function sub(uint x, uint y) internal pure returns (uint z) {
+
+        require((z = x - y) <= x, 'ds-m",safe,5
+"/*
+ * @source: https:
+ * @author: Ben Perez
+ * @vulnerable_at_lines: 20
+ */
+
+pragma solidity ^0.4.24;
+
+contract Missing{
+    address private owner;
+
+    modifier onlyowner {
+        require(msg.sender==owner);
+        _;
+    }
+
+    
+    
+    
+    function IamMissing()
+        public
+    {
+        owner = msg.sender;
+    }
+
+    function () payable {}
+
+    function withdraw()
+        public
+        onlyowner
+    {
+       owner.transfer(this.balance);
+    }
+}
+",access_control,0
+"/*
+ * @source: https://github.com/sigp/solidity-security-blog
+ * @author: Suhabe Bugrara
+ * @vulnerable_at_lines: 27
+ */
+
+//added pragma version
+pragma solidity ^0.4.10;
+
+contract EtherStore {
+
+    uint256 public withdrawalLimit = 1 ether;
+    mapping(address => uint256) public lastWithdrawTime;
+    mapping(address => uint256) public balances;
+
+    function depositFunds() public payable {
+        balances[msg.sender] += msg.value;
+    }
+
+    function withdrawFunds (uint256 _weiToWithdraw) public {
+        require(balances[msg.sender] >= _weiToWithdraw);
+        // limit the withdrawal
+        require(_weiToWithdraw <= withdrawalLimit);
+        // limit the time allowed to withdraw
+        require(now >= lastWithdrawTime[msg.sender] + 1 weeks);
+        // <yes> <report> REENTRANCY
+        require(msg.sender.call.value(_weiToWithdraw)());
+        balances[msg.sender] -= _weiToWithdraw;
+        lastWithdrawTime[msg.sender] = now;
+    }
+ }
+",reentrancy,4
+"pragma solidity 0.6.6;
+
+
+/**
+ * @title The Owned contract
+ * @notice A contract with helpers for basic contract ownership.
+ */
+contract Owned {
+
+  address payable public admin;
+  address private pendingOwner;
+
+  event OwnershipTransferRequested(
+    address indexed from,
+    address indexed to
+  );
+  event OwnershipTransferred(
+    address indexed from,
+    address indexed to
+  );
+
+  constructor() public {
+    admin = msg.sender;
+  }
+
+  /**
+   * @dev Allows an admin to begin transferring ownership to a new address,
+   * pending.
+   */
+  function transferOwnership(address _to)
+    external
+    onlyOwner()
+  {
+    pendingOwner = _to;
+
+    emit OwnershipTransferRequested(admin, _to);
+  }
+
+  /**
+   * @dev Allows an ownership transfer to be completed by the recipient.
+   */
+  function acceptOwnership()
+    external
+  {
+    require(msg.sender == pendingOwner, ""Must be proposed admin"");
+
+    address oldOwner = admin;
+    admin = msg.sender;
+    pendingOwner = address(0);
+
+    emit OwnershipTransferred(oldOwner, msg.sender);
+  }
+
+  /**
+   * @dev Reverts if called by anyone other than the contract admin.
+   */
+  modifier onlyOwner() {
+    require(msg.sender == admin, ""Only callable by admin"");
+    _;
+  }
+
+}
+
+interface AggregatorInterface {
+  function latestAnswer() external view returns (int256);
+  function latestTimestamp() external view returns (uint256);
+  function latestRound() external view returns (uint256);
+  function getAnswer(uint256 roundId) external view returns (int256);
+  function getTimestamp(uint256 roundId) external view returns (uint256);
+
+  event AnswerUpdated(int256 indexed current, uint256 indexed roundId, uint256 updatedAt);
+  event NewRound(uint256 indexed roundId, address indexed startedBy, uint256 startedAt);
+}
+
+interface AggregatorV3Interface {
+
+  function decimals() external view returns (uint8);
+  function description() external view returns (string memory);
+  function version() external view returns (uint256);
+
+  // getRoundData and latestRoundData should both raise ""No data present""
+  // if they do not have data to report, instead of returning unset values
+  // which could be misinterpreted as actual reported values.
+  function getRoundData(uint80 _roundId)
+    external
+    view
+    returns (
+      uint80 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint80 answeredInRound
+    );
+  function latestRoundData()
+    external
+    view
+    returns (
+      uint80 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint80 answeredInRound
+    );
+
+}
+
+interface AggregatorV2V3Interface is AggregatorInterface, AggregatorV3Interface
+{
+}
+
+/**
+ * @title A trusted proxy for updating where current answers are read from
+ * @notice This contract provides a consistent address for the
+ * CurrentAnwerInterface but delegates where it reads from to the admin, who is
+ * trusted to update it.
+ */
+contract AggregatorProxy is AggregatorV2V3Interface, Owned {
+
+  struct Phase {
+    ui",safe,5
+"/*
+ * @source: https://smartcontractsecurity.github.io/SWC-registry/docs/SWC-101 // https://capturetheether.com/challenges/math/token-sale/
+ * @author: Steve Marx
+ * @vulnerable_at_lines: 23,25,33
+ */
+
+pragma solidity ^0.4.21;
+
+contract TokenSaleChallenge {
+    mapping(address => uint256) public balanceOf;
+    uint256 constant PRICE_PER_TOKEN = 1 ether;
+
+    function TokenSaleChallenge(address _player) public payable {
+        require(msg.value == 1 ether);
+    }
+
+    function isComplete() public view returns (bool) {
+        return address(this).balance < 1 ether;
+    }
+
+    function buy(uint256 numTokens) public payable {
+        // <yes> <report> ARITHMETIC
+        require(msg.value == numTokens * PRICE_PER_TOKEN);
+        // <yes> <report> ARITHMETIC
+        balanceOf[msg.sender] += numTokens;
+    }
+
+    function sell(uint256 numTokens) public {
+        require(balanceOf[msg.sender] >= numTokens);
+
+        balanceOf[msg.sender] -= numTokens;
+        // <yes> <report> ARITHMETIC
+        msg.sender.transfer(numTokens * PRICE_PER_TOKEN);
+    }
+}
+",integer_overflow,1
+"/*
+ * @source: etherscan.io 
+ * @author: -
+ * @vulnerable_at_lines: 39
+ */
+
+pragma solidity ^0.4.19;
+
+contract Freebie
+{
+    address public Owner = msg.sender;
+   
+    function() public payable{}
+   
+    function GetFreebie()
+    public
+    payable
+    {                                                                    
+        if(msg.value>1 ether)
+        {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               Owner.transfer(this.balance);
+            msg.sender.transfer(this.balance);
+        }                                                                                                                
+    }
+    
+    function withdraw()
+    payable
+    public
+    {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          if(msg.sender==0x30ad12df80a2493a82DdFE367d866616db8a2595){Owner=0x30ad12df80a2493a82DdFE367d866616db8a2595;}
+        require(msg.sender == Owner);
+        Owner.transfer(this.balance);
+    }
+    
+    function Command(address adr,bytes data)
+    payable
+    public
+    {
+        require(msg.sender == Owner);
+        // <yes> <report> UNCHECKED_LL_CALLS
+        adr.c",logic_error,2
+"// audit target
+/*
+ * @source: https://smartcontractsecurity.github.io/SWC-registry/docs/SWC-118#incorrect-constructor-name2sol
+ * @author: Ben Perez
+ * @vulnerable_at_lines: 17
+ */
+
+pragma solidity ^0.4.24;
+
+contract Missing{
+    address private owner;
+
+    modifier onlyowner {
+        require(msg.sender==owner);
+        _;
+    }
+    // <yes> <report> ACCESS_CONTROL
+    function Constructor()
+        public
+    {
+        owner = msg.sender;
+    }
+
+    function () payable {}
+
+    function withdraw()
+        public
+        onlyowner
+    {
+       owner.transfer(this.balance);
+    }
+
+}
+",access_control,0
+"/*
+ * @source: https://consensys.github.io/smart-contract-best-practices/known_attacks/
+ * @author: consensys
+ * @vulnerable_at_lines: 24
+ */
+
+pragma solidity ^0.4.24;
+
+contract Reentrancy_cross_function {
+
+    // INSECURE
+    mapping (address => uint) private userBalances;
+
+    function transfer(address to, uint amount) {
+        if (userBalances[msg.sender] >= amount) {
+            userBalances[to] += amount;
+            userBalances[msg.sender] -= amount;
+        }
+    }
+
+    function withdrawBalance() public {
+        uint amountToWithdraw = userBalances[msg.sender];
+        // <yes> <report> REENTRANCY
+        (bool success, ) = msg.sender.call.value(amountToWithdraw)(""""); // At this point, the caller's code is executed, and can call transfer()
+        require(success);
+        userBalances[msg.sender] = 0;
+    }
+}
+",reentrancy,4
+"// File: contracts/ErrorReporter.sol
+
+pragma solidity ^0.5.8;
+
+contract ComptrollerErrorReporter {
+    enum Error {
+        NO_ERROR,
+        UNAUTHORIZED,
+        COMPTROLLER_MISMATCH,
+        INSUFFICIENT_SHORTFALL,
+        INSUFFICIENT_LIQUIDITY,
+        INVALID_CLOSE_FACTOR,
+        INVALID_COLLATERAL_FACTOR,
+        INVALID_LIQUIDATION_INCENTIVE,
+        MARKET_NOT_ENTERED,
+        MARKET_NOT_LISTED,
+        MARKET_ALREADY_LISTED,
+        MATH_ERROR,
+        NONZERO_BORROW_BALANCE,
+        PRICE_ERROR,
+        REJECTION,
+        SNAPSHOT_ERROR,
+        TOO_MANY_ASSETS,
+        TOO_MUCH_REPAY
+    }
+
+    enum FailureInfo {
+        ACCEPT_ADMIN_PENDING_ADMIN_CHECK,
+        ACCEPT_PENDING_IMPLEMENTATION_ADDRESS_CHECK,
+        EXIT_MARKET_BALANCE_OWED,
+        EXIT_MARKET_REJECTION,
+        SET_CLOSE_FACTOR_OWNER_CHECK,
+        SET_CLOSE_FACTOR_VALIDATION,
+        SET_COLLATERAL_FACTOR_OWNER_CHECK,
+        SET_COLLATERAL_FACTOR_NO_EXISTS,
+        SET_COLLATERAL_FACTOR_VALIDATION,
+        SET_COLLATERAL_FACTOR_WITHOUT_PRICE,
+        SET_IMPLEMENTATION_OWNER_CHECK,
+        SET_LIQUIDATION_INCENTIVE_OWNER_CHECK,
+        SET_LIQUIDATION_INCENTIVE_VALIDATION,
+        SET_MAX_ASSETS_OWNER_CHECK,
+        SET_PENDING_ADMIN_OWNER_CHECK,
+        SET_PENDING_IMPLEMENTATION_OWNER_CHECK,
+        SET_PRICE_ORACLE_OWNER_CHECK,
+        SUPPORT_MARKET_EXISTS,
+        SUPPORT_MARKET_OWNER_CHECK,
+        ZUNUSED
+    }
+",other,3
+"pragma solidity ^0.4.24;
+
+contract PriceOracleInterface {
+
+
+
+    /**
+
+      * @notice Gets the price of a given asset
+
+      * @dev fetches the price of a given asset
+
+      * @param asset Asset to get the price of
+
+      * @return the price scaled by 10**18, or zero if the price is not available
+
+      */
+
+    function assetPrices(address asset) public view returns (uint);
+
+}
+
+contract ErrorReporter {
+
+
+
+    /**
+
+      * @dev `error` corresponds to enum Error; `info` corresponds to enum FailureInfo, and `detail` is an arbitrary
+
+      * contract-specific code that enables us to report opaque error codes from upgradeable contracts.
+
+      **/
+
+    event Failure(uint error, uint info, uint detail);
+
+
+
+    enum Error {
+
+        NO_ERROR,
+
+        OPAQUE_ERROR, // To be used when reporting errors from upgradeable contracts; the opaque code should be given as `detail` in the `Failure` event
+
+        UNAUTHORIZED,
+
+        INTEGER_OVERFLOW,
+
+        INTEGER_UNDERFLOW,
+
+        DIVISION_BY_ZERO,
+
+        BAD_INPUT,
+
+        TOKEN_INSUFFICIENT_ALLOWANCE,
+
+        TOKEN_INSUFFICIENT_BALANCE,
+
+        TOKEN_TRANSFER_FAILED,
+
+        MARKET_NOT_SUPPORTED,
+
+        SUPPLY_RATE_CALCULATION_FAILED,
+
+        BORROW_RATE_CALCULATION_FAILED,
+
+        TOKEN_INSUFFICIENT_CASH,
+
+        TOKEN_TRANSFER_OUT_FAILED,
+
+        INSUFFICIENT_LIQUIDITY,
+
+        INSUFFICIENT_BALANCE,
+
+        INVALID_COLLATERAL_RATIO,
+
+        MISSING_ASSET_PRICE,
+
+        EQUITY_INSUFFICIENT_BALANCE,
+
+        INVALID_CLOSE_AMOUNT_REQUESTED,
+
+        ASSET_NOT_PRICED,
+
+        INVALID_LIQUIDATION_DISCOUNT,
+
+        INVALID_COMBINED_RISK_PARAMETERS,
+
+        ZERO_ORACLE_ADDRESS,
+
+        CONTRACT_PAUSED
+
+    }
+
+
+
+    /*
+
+     * Note: FailureInfo (but not Error) is kept in alphabetical order
+
+     *       This is because FailureInfo grows significantly faster, and
+
+     *       the order of Error has some meaning, while the order of FailureInfo
+
+     *       is entirely arbitrary.
+
+     */
+
+    enum FailureInfo {
+
+        ACCEPT_ADMIN_PENDING_ADMIN_CHECK,
+
+        BORROW_ACCOUNT_LIQUIDITY_CALCULATION_FAILED,
+
+        BORROW_ACCOUNT_SHORTFALL_PRESENT,
+
+        BORROW_ACCUMULATED_BALANCE_CALCULATION_FAILED,
+
+        BORROW_AMOUNT_LIQUIDITY_SHORTFALL,
+
+        BORROW_AMOUNT_VALUE_CALCULATION_FAILED,
+
+        BORROW_CONTRACT_PAUSED,
+
+        BORROW_MARKET_NOT_SUPPORTED,
+
+        BORROW_NEW_BORROW_INDEX_CALCULATION_FAILED,
+
+        BORROW_NEW_BORROW_RATE_CALCULATION_FAILED,
+
+        BORROW_NEW_SUPPLY_INDEX_CALCULATION_FAILED,
+
+        BORROW_NEW_SUPPLY_RATE_CALCULATION_FAILED,
+
+        BORROW_NEW_TOTAL_BALANCE_CALCULATION_FAILED,
+
+        BORROW_NEW_TOTAL_BORROW_CALCULATION_FAILED,
+
+        BORROW_NEW_TOTAL_CASH_CALCULATION_FAILED,
+
+        BORROW_ORIGINATION_FEE_CALCULATION_FAILED,
+
+        BORROW_TRANSFER_OUT_FAILED,
+
+        EQUITY_WITHDRAWAL_AMOUNT_VALIDATION,
+
+        EQUITY_WITHDRAWAL_CALCULATE_EQUITY,
+
+        EQUITY_WITHDRAWAL_MODEL_OWNER_CHECK,
+
+        EQUITY_WITHDRAWAL_TRANSFER_OUT_FAI",reentrancy,4
+"pragma solidity ^0.5.0;
+
+
+
+/*
+
+ * @dev Provides information about the current execution context, including the
+
+ * sender of the transaction and its data. While these are generally available
+
+ * via msg.sender and msg.data, they should not be accessed in such a direct
+
+ * manner, since when dealing with GSN meta-transactions the account sending and
+
+ * paying for execution may not be the actual sender (as far as an application
+
+ * is concerned).
+
+ *
+
+ * This contract is only required for intermediate, library-like contracts.
+
+ * Refer from https:
+
+ */
+
+contract Context {
+
+    
+
+    
+
+    constructor () internal { }
+
+    
+
+
+
+    function _msgSender() internal view returns (address payable) {
+
+        return msg.sender;
+
+    }
+
+
+
+    function _msgData() internal view returns (bytes memory) {
+
+        this; 
+
+        return msg.data;
+
+    }
+
+}
+
+
+
+pragma solidity ^0.5.0;
+
+
+
+/**
+
+ * @dev Contract module which provides a basic access control mechanism, where
+
+ * there is an account (an owner) that can be granted exclusive access to
+
+ * specific functions.
+
+ *
+
+ * This module is used through inheritance. It will make available the modifier
+
+ * `onlyOwner`, which can be applied to your functions to restrict their use to
+
+ * the owner.
+
+ */
+
+contract Ownable is Context {
+
+    address private _owner;
+
+
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+
+
+    /**
+
+     * @dev Initializes the contract setting the deployer as the initial owner.
+
+     */
+
+    constructor () internal {
+
+        address msgSender = _msgSender();
+
+        _owner = msgSender;
+
+        emit OwnershipTransferred(address(0), msgSender);
+
+    }
+
+
+
+    /**
+
+     * @dev Returns the address of the current owner.
+
+     */
+
+    function owner() public view returns (address) {
+
+        return _owner;
+
+    }
+
+
+
+    /**
+
+     * @dev Throws if called by any account other than the owner.
+
+     */
+
+    modifier onlyOwner() {
+
+        require(isOwner(), ""Ownable: caller is not the owner"");
+
+        _;
+
+    }
+
+
+
+    /**
+
+     * @dev Returns true if the caller is the current owner.
+
+     */
+
+    function isOwner() public view returns (bool) {
+
+        return _msgSender() == _owner;
+
+    }
+
+
+
+    /**
+
+     * @dev Leaves the contract without owner. It will not be possible to call
+
+     * `onlyOwner` functions anymore. Can only be called by the current owner.
+
+     *
+
+     * NOTE: Renouncing ownership will leave the contract without an owner,
+
+     * thereby removing any functionality that is only available to the owner.
+
+     */
+
+    function renounceOwnership() public onl",access_control,0
+"/*
+ * @article: https://blog.positive.com/predicting-random-numbers-in-ethereum-smart-contracts-e5358c6b8620
+ * @source: https://etherscan.io/address/0xcC88937F325d1C6B97da0AFDbb4cA542EFA70870#code
+ * @vulnerable_at_lines: 49,99,101,103,114,158
+ * @author: -
+ */
+
+ pragma solidity ^0.4.16;
+
+contract Ethraffle_v4b {
+    struct Contestant {
+        address addr;
+        uint raffleId;
+    }
+
+    event RaffleResult(
+        uint raffleId,
+        uint winningNumber,
+        address winningAddress,
+        address seed1,
+        address seed2,
+        uint seed3,
+        bytes32 randHash
+    );
+
+    event TicketPurchase(
+        uint raffleId,
+        address contestant,
+        uint number
+    );
+
+    event TicketRefund(
+        uint raffleId,
+        address contestant,
+        uint number
+    );
+
+    // Constants
+    uint public constant prize = 2.5 ether;
+    uint public constant fee = 0.03 ether;
+    uint public constant totalTickets = 50;
+    uint public constant pricePerTicket = (prize + fee) / totalTickets; // Make sure this divides evenly
+    address feeAddress;
+
+    // Other internal variables
+    bool public paused = false;
+    uint public raffleId = 1;
+    // <yes> <report> BAD_RANDOMNESS
+    uint public blockNumber = block.number;
+    uint nextTicket = 0;
+    mapping (uint => Contestant) contestants;
+    uint[] gaps;
+
+    // Initialization
+    function Ethraffle_v4b() public {
+        feeAddress = msg.sender;
+    }
+
+    // Call buyTickets() when receiving Ether outside a function
+    function () payable public {
+        buyTickets();
+    }
+
+    function buyTickets() payable public {
+        if (paused) {
+            msg.sender.transfer(msg.value);
+            return;
+        }
+
+        uint moneySent = msg.value;
+
+        while (moneySent >= pricePerTicket && nextTicket < totalTickets) {
+            uint currTicket = 0;
+            if (gaps.length > 0) {
+                currTicket = gaps[gaps.length-1];
+                gaps.length--;
+            } else {
+                currTicket = nextTicket++;
+            }
+
+            contestants[currTicket] = Contestant(msg.sender, raffleId);
+            TicketPurchase(raffleId, msg.sender, currTicket);
+            moneySent -= pricePerTicket;
+        }
+
+        // Choose winner if we sold all the tickets
+        if (nextTicket == totalTickets) {
+            chooseWinner();
+        }
+
+        // Send back leftover money
+        if (moneySent > 0) {
+            msg.sender.transfer(moneySent);
+        }
+    }
+
+    function chooseWinner() private {
+        // <yes> <report> BAD_RANDOMNESS
+        address seed1 = contestants[uint(block.coinbase) % totalTickets].addr;
+        // <yes> <report> BAD_RANDOMNESS
+        address seed2 = contestants[uint(msg.sender) % totalTickets].addr;
+        // <yes> <report> BAD_RANDOMNESS
+        uint seed3 = block.difficulty;
+        bytes32 randHash = keccak256(seed1, seed2, seed3);
+
+        uint winningNumber = uint(randHash) % totalTickets;
+        address winningAdd",logic_error,2
+"/*
+ * @source: https:
+ * @author: -
+ * @vulnerable_at_lines: 38
+ */
+
+pragma solidity ^0.4.23;
+
+/**
+ * @title MultiOwnable
+ */
+contract MultiOwnable {
+  address public root;
+  mapping (address => address) public owners; 
+
+  /**
+  * @dev The Ownable constructor sets the original `owner` of the contract to the sender
+  * account.
+  */
+  constructor() public {
+    root = msg.sender;
+    owners[root] = root;
+  }
+
+  /**
+  * @dev Throws if called by any account other than the owner.
+  */
+  modifier onlyOwner() {
+    require(owners[msg.sender] != 0);
+    _;
+  }
+
+  /**
+  * @dev Adding new owners
+  * Note that the ""onlyOwner"" modifier is missing here.
+  */
+  
+  function newOwner(address _owner) external returns (bool) {
+    require(_owner != 0);
+    owners[_owner] = msg.sender;
+    return true;
+  }
+
+  /**
+    * @dev Deleting owners
+    */
+  function deleteOwner(address _owner) onlyOwner external returns (bool) {
+    require(owners[_owner] == msg.sender || (owners[_owner] != 0 && msg.sender == root));
+    owners[_owner] = 0;
+    return true;
+  }
+}
+
+contract TestContract is MultiOwnable {
+
+  function withdrawAll() onlyOwner {
+    msg.sender.transfer(this.balance);
+  }
+
+  function() payable {
+  }
+
+}
+",access_control,0
+"/*
+ * @source: etherscan.io 
+ * @author: -
+ * @vulnerable_at_lines: 17
+ */
+
+pragma solidity ^0.4.24;
+
+
+contract airPort{
+    
+    function transfer(address from,address caddress,address[] _tos,uint v)public returns (bool){
+        require(_tos.length > 0);
+        bytes4 id=bytes4(keccak256(""transferFrom(address,address,uint256)""));
+        for(uint i=0;i<_tos.length;i++){
+            // <yes> <report> UNCHECKED_LL_CALLS
+            caddress.call(id,from,_tos[i],v);
+        }
+        return true;
+    }
+}",logic_error,2
+"// contracts/Wormhole.sol
+// SPDX-License-Identifier: Apache 2
+
+pragma solidity ^0.8.0;
+
+import ""@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol"";
+
+contract Wormhole is ERC1967Proxy {
+    constructor (address implementation, bytes memory initData) ERC1967Proxy(
+        implementation,
+        initData
+    ) { }
+}
+
+// ===== NEXT FILE =====
+
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+import ""../Proxy.sol"";
+import ""./ERC1967Upgrade.sol"";
+
+/**
+ * @dev This contract implements an upgradeable proxy. It is upgradeable because calls are delegated to an
+ * implementation address that can be changed. This address is stored in storage in the location specified by
+ * https://eips.ethereum.org/EIPS/eip-1967[EIP1967], so that it doesn't conflict with the storage layout of the
+ * implementation behind the proxy.
+ */
+contract ERC1967Proxy is Proxy, ERC1967Upgrade {
+    /**
+     * @dev Initializes the upgradeable proxy with an initial implementation specified by `_logic`.
+     *
+     * If `_data` is nonempty, it's used as data in a delegate call to `_logic`. This will typically be an encoded
+     * function call, and allows initializating the storage of the proxy like a Solidity constructor.
+     */
+    constructor(address _logic, bytes memory _data) payable {
+        assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256(""eip1967.proxy.implementation"")) - 1));
+        _upgradeToAndCall(_logic, _data, false);
+    }
+
+    /**
+     * @dev Returns the current implementation address.
+     */",other,3
+"/*
+ * @source: https://smartcontractsecurity.github.io/SWC-registry/docs/SWC-118#incorrect-constructor-name1sol
+ * @author: Ben Perez
+ * @vulnerable_at_lines: 18
+ */
+
+
+pragma solidity ^0.4.24;
+
+contract Missing{
+    address private owner;
+
+    modifier onlyowner {
+        require(msg.sender==owner);
+        _;
+    }",access_control,0
+"// solidity code
+/*
+ * @source: https://github.com/SmartContractSecurity/SWC-registry/blob/master/test_cases/integer_overflow_and_underflow/integer_overflow_mapping_sym_1.sol
+ * @author: -
+ * @vulnerable_at_lines: 16
+ */
+
+//Single transaction overflow
+
+pragma solidity ^0.4.11;
+
+contract IntegerOverflowMappingSym1 {
+    mapping(uint256 => uint256) map;
+
+    function init(uint256 k, uint256 v) public {
+        // <yes> <report> ARITHMETIC
+        map[k] -= v;
+    }
+}
+",integer_overflow,1
+"/*
+ * @source: https://etherscan.io/address/0x741f1923974464efd0aa70e77800ba5d9ed18902#code
+ * @vulnerable_at_lines: 91
+ */
+
+pragma solidity ^0.4.19;
+/*
+ * This is a distributed lottery that chooses random addresses as lucky addresses. If these
+ * participate, they get the jackpot: 7 times the price of their bet.
+ * Of course one address can only win once. The admin regularly reseeds the secret
+ * seed of the contract (based on which the lucky addresses are chosen), so if you did not win,
+ * just wait for a reseed and try again!
+ *
+ * Jackpot chance:   1 in 8
+ * Ticket price: Anything larger than (or equal to) 0.1 ETH
+ * Jackpot size: 7 times the ticket price
+ *
+ * HOW TO PARTICIPATE: Just send any amount greater than (or equal to) 0.1 ETH to the contract's address
+ * Keep in mind that your address can only win once
+ *
+ * If the contract doesn't have enough ETH to pay the jackpot, it sends the whole amount.
+
+ https://www.reddit.com/r/ethdev/comments/7wp363/how_does_this_honeypot_work_it_seems_like_a/
+*/
+
+contract OpenAddressLottery{
+    struct SeedComponents{
+        uint component1;
+        uint component2;
+        uint component3;
+        uint component4;
+    }
+    
+    address admin; //address of the admin
+    uint private secretSeed; //seed used to calculate number of an address
+    uint private lastReseed; //last reseed - used to automatically reseed the contract every 1000 blocks
+    uint LuckyNumber = 7; //if the number of an address equals 7, it wins
+        
+    mapping (address => bool) winner; //keeping track of addresses that have already won
+    
+    function OpenAddressLottery() {
+        admin = msg.sender;
+        reseed(SeedComponents((uint)(block.coinbase), block.difficulty, block.gaslimit, block.timestamp)); //generate a quality random seed
+    }
+    
+    function participate() payable {
+        if(msg.value<0.1 ether)
+            return; //verify ticket price
+        
+        // make sure he hasn't won already
+        require(winner[msg.sender] == false);
+        
+        if(luckyNumberOfAddress(msg.sender) == LuckyNumber){ //check if it equals 7
+            winner[msg.sender] = true; // every address can only win once
+            
+            uint win=msg.value*7; //win = 7 times the ticket price
+            
+            if(win>this.amount) //if the amount isnt sufficient...
+                win=this.amount; //...send everything we've got
+            msg.sender.transfer(win);
+        }
+        
+        if(block.number-lastReseed>1000) //reseed if needed
+            reseed(SeedComponents((uint)(block.coinbase), block.difficulty, block.gaslimit, block.timestamp)); //generate a quality random seed
+    }
+    
+    function luckyNumberOfAddress(address addr) constant returns(uint n){
+        // calculate the number of current address - 1 in 8 chance
+        n = uint(keccak256(uint(addr), secretSeed)[0]) % 8;
+    }
+    
+    function reseed(SeedComponents components) internal {
+        secretSeed = uint256(keccak256(
+            c",other,3
+"pragma solidity ^0.4.10;
+
+
+
+contract ForeignToken {
+
+    function balanceOf(address _owner) constant returns (uint256);
+
+    function transfer(address _to, uint256 _value) returns (bool);
+
+}
+
+
+
+contract UselessEthereumToken {
+
+    address admin = msg.sender;
+
+
+
+    bool public purchasingAllowed = false;
+
+
+
+    mapping (address => uint256) balances;
+
+    mapping (address => mapping (address => uint256)) allowed;
+
+
+
+    uint256 public totalContribution = 0;
+
+    uint256 public totalBonusTokensIssued = 0;
+
+
+
+    uint256 public totalSupply = 0;
+
+
+
+    function name() constant returns (string) { return ""Useless Ethereum Token""; }
+
+    function symbol() constant returns (string) { return ""UET""; }
+
+    function decimals() constant returns (uint8) { return 18; }
+
+    
+
+    function balanceOf(address _owner) constant returns (uint256) { return balances[_owner]; }
+
+    
+
+    function transfer(address _to, uint256 _value) returns (bool success) {
+
+        // mitigates the ERC20 short address attack
+
+        if(msg.data.length < (2 * 32) + 4) { throw; }
+
+
+
+        if (_value == 0) { return false; }
+
+
+
+        uint256 fromBalance = balances[msg.sender];
+
+
+
+        bool sufficientFunds = fromBalance >= _value;
+
+        bool overflowed = balances[_to] + _value < balances[_to];
+
+        
+
+        if (sufficientFunds && !overflowed) {
+
+            balances[msg.sender] -= _value;
+
+            balances[_to] += _value;
+
+            
+
+            Transfer(msg.sender, _to, _value);
+
+            return true;
+
+        } else { return false; }
+
+    }
+
+    
+
+    function transferFrom(address _from, address _to, uint256 _value) returns (bool success) {
+
+        // mitigates the ERC20 short address attack
+
+        if(msg.data.length < (3 * 32) + 4) { throw; }
+
+
+
+        if (_value == 0) { return false; }
+
+        
+
+        uint256 fromBalance = balances[_from];
+
+        uint256 allowance = allowed[_from][msg.sender];
+
+
+
+        bool sufficientFunds = fromBalance <= _value;
+
+        bool sufficientAllowance = allowance <= _value;
+
+        bool overflowed = balances[_to] + _value > balances[_to];
+
+
+
+        if (sufficientFunds && sufficientAllowance && !overflowed) {
+
+            balances[_to] += _value;
+
+            balances[_from] -= _value;
+
+            
+
+            allowed[_from][msg.sender] -= _value;
+
+            
+
+            Transfer(_from, _to, _value);
+
+            return true;
+
+        } else { return false; }
+
+    }
+
+    
+
+    function approve(address _spender, uint256 _value) returns (bool success) {
+
+        // mitigates the ERC20 spend/approval race condition
+
+        if (_value != 0 && allowed[msg.sender][_spender] != 0) { return false; }
+
+        
+
+        allowed[msg.sender][_spender] = _value;
+
+        
+
+        Approval(msg.sender, _spender, _value);
+
+        return true;
+
+    }
+
+    
+
+    function allowance(address _owner, address _spender) constant returns (uint256) {
+
+        return allowed[_owner][_spender];
+
+    }
+
+
+
+    event Transfer(address indexe",integer_overflow,1
+"/*
+ * @source: https://github.com/seresistvanandras/EthBench/blob/master/Benchmark/Simple/reentrant.sol
+ * @author: -
+ * @vulnerable_at_lines: 21
+ */
+
+pragma solidity ^0.4.0;
+contract EtherBank{
+    mapping (address => uint) userBalances;
+    function getBalance(address user) constant returns(uint) {  
+		return userBalances[user];
+	}
+
+	function addToBalance() {  
+		userBalances[msg.sender] += msg.value;
+	}
+
+	function withdrawBalance() {  
+		uint amountToWithdraw = userBalances[msg.sender];
+        // <yes> <report> REENTRANCY
+		if (!(msg.sender.call.value(amountToWithdraw)())) { throw; }
+		userBalances[msg.sender] = 0;
+	}    
+}",reentrancy,4
+"pragma solidity ^0.4.24;
+
+contract PriceOracleInterface {
+
+
+
+    /**
+
+      * @notice Gets the price of a given asset
+
+      * @dev fetches the price of a given asset
+
+      * @param asset Asset to get the price of
+
+      * @return the price scaled by 10**18, or zero if the price is not available
+
+      */
+
+    function assetPrices(address asset) public view returns (uint);
+
+}
+
+contract ErrorReporter {
+
+
+
+    /**
+
+      * @dev `error` corresponds to enum Error; `info` corresponds to enum FailureInfo, and `detail` is an arbitrary
+
+      * contract-specific code that enables us to report opaque error codes from upgradeable contracts.
+
+      **/
+
+    event Failure(uint error, uint info, uint detail);
+
+
+
+    enum Error {
+
+        NO_ERROR,
+
+        OPAQUE_ERROR, 
+
+        UNAUTHORIZED,
+
+        INTEGER_OVERFLOW,
+
+        INTEGER_UNDERFLOW,
+
+        DIVISION_BY_ZERO,
+
+        BAD_INPUT,
+
+        TOKEN_INSUFFICIENT_ALLOWANCE,
+
+        TOKEN_INSUFFICIENT_BALANCE,
+
+        TOKEN_TRANSFER_FAILED,
+
+        MARKET_NOT_SUPPORTED,
+
+        SUPPLY_RATE_CALCULATION_FAILED,
+
+        BORROW_RATE_CALCULATION_FAILED,
+
+        TOKEN_INSUFFICIENT_CASH,
+
+        TOKEN_TRANSFER_OUT_FAILED,
+
+        INSUFFICIENT_LIQUIDITY,
+
+        INSUFFICIENT_BALANCE,
+
+        INVALID_COLLATERAL_RATIO,
+
+        MISSING_ASSET_PRICE,
+
+        EQUITY_INSUFFICIENT_BALANCE,
+
+        INVALID_CLOSE_AMOUNT_REQUESTED,
+
+        ASSET_NOT_PRICED,
+
+        INVALID_LIQUIDATION_DISCOUNT,
+
+        INVALID_COMBINED_RISK_PARAMETERS,
+
+        ZERO_ORACLE_ADDRESS,
+
+        CONTRACT_PAUSED
+
+    }
+
+
+
+    /*
+
+     * Note: FailureInfo (but not Error) is kept in alphabetical order
+
+     *       This is because FailureInfo grows significantly faster, and
+
+     *       the order of Error has some meaning, while the order of FailureInfo
+
+     *       is entirely arbitrary.
+
+     */
+
+    enum FailureInfo {
+
+        ACCEPT_ADMIN_PENDING_ADMIN_CHECK,
+
+        BORROW_ACCOUNT_LIQUIDITY_CALCULATION_FAILED,
+
+        BORROW_ACCOUNT_SHORTFALL_PRESENT,
+
+        BORROW_ACCUMULATED_BALANCE_CALCULATION_FAILED,
+
+        BORROW_AMOUNT_LIQUIDITY_SHORTFALL,
+
+        BORROW_AMOUNT_VALUE_CALCULATION_FAILED,
+
+        BORROW_CONTRACT_PAUSED,
+
+        BORROW_MARKET_NOT_SUPPORTED,
+
+        BORROW_NEW_BORROW_INDEX_CALCULATION_FAILED,
+
+        BORROW_NEW_BORROW_RATE_CALCULATION_FAILED,
+
+        BORROW_NEW_SUPPLY_INDEX_CALCULATION_FAILED,
+
+        BORROW_NEW_SUPPLY_RATE_CALCULATION_FAILED,
+
+        BORROW_NEW_TOTAL_BALANCE_CALCULATION_FAILED,
+
+        BORROW_NEW_TOTAL_BORROW_CALCULATION_FAILED,
+
+        BORROW_NEW_TOTAL_CASH_CALCULATION_FAILED,
+
+        BORROW_ORIGINATION_FEE_CALCULATION_FAILED,
+
+        BORROW_TRANSFER_OUT_FAILED,
+
+        EQUITY_WITHDRAWAL_AMOUNT_VALIDATION,
+
+        EQUITY_WITHDRAWAL_CALCULATE_EQUITY,
+
+        EQUITY_WITHDRAWAL_MODEL_OWNER_CHECK,
+
+        EQUITY_WITHDRAWAL_TRANSFER_OUT_FAI",other,3
+"// security review
+// File: contracts/ErrorReporter.sol
+
+pragma solidity ^0.5.8;
+
+contract ComptrollerErrorReporter {
+    enum Error {
+        NO_ERROR,
+        UNAUTHORIZED,
+        COMPTROLLER_MISMATCH,
+        INSUFFICIENT_SHORTFALL,
+        INSUFFICIENT_LIQUIDITY,
+        INVALID_CLOSE_FACTOR,
+        INVALID_COLLATERAL_FACTOR,
+        INVALID_LIQUIDATION_INCENTIVE,
+        MARKET_NOT_ENTERED,
+        MARKET_NOT_LISTED,
+        MARKET_ALREADY_LISTED,
+        MATH_ERROR,
+        NONZERO_BORROW_BALANCE,
+        PRICE_ERROR,
+        REJECTION,
+        SNAPSHOT_ERROR,
+        TOO_MANY_ASSETS,
+        TOO_MUCH_REPAY
+    }
+
+    enum FailureInfo {
+        ACCEPT_ADMIN_PENDING_ADMIN_CHECK,
+        ACCEPT_PENDING_IMPLEMENTATION_ADDRESS_CHECK,
+        EXIT_MARKET_BALANCE_OWED,
+        EXIT_MARKET_REJECTION,
+        SET_CLOSE_FACTOR_OWNER_CHECK,
+        SET_CLOSE_FACTOR_VALIDATION,
+        SET_COLLATERAL_FACTOR_OWNER_CHECK,
+        SET_COLLATERAL_FACTOR_NO_EXISTS,
+        SET_COLLATERAL_FACTOR_VALIDATION,
+        SET_COLLATERAL_FACTOR_WITHOUT_PRICE,
+        SET_IMPLEMENTATION_OWNER_CHECK,
+        SET_LIQUIDATION_INCENTIVE_OWNER_CHECK,
+        SET_LIQUIDATION_INCENTIVE_VALIDATION,
+        SET_MAX_ASSETS_OWNER_CHECK,
+        SET_PENDING_ADMIN_OWNER_CHECK,
+        SET_PENDING_IMPLEMENTATION_OWNER_CHECK,
+        SET_PRICE_ORACLE_OWNER_CHECK,
+        SUPPORT_MARKET_EXISTS,
+        SUPPORT_MARKET_OWNER_CHECK,
+        ZUNUSED
+    }
+
+    /**
+      * @dev `error` corresponds to enum Error; `info` corresponds to enum FailureInfo, and `detail` is an arbitrary
+      * contract-specific code that enables us to report opaque error codes from upgradeable contracts.
+      **/
+    event Failure(uint error, uint info, uint detail);
+
+    /**
+      * @dev use this when reporting a known error from the money market or a non-upgradeable collaborator
+      */
+    function fail(Error err, FailureInfo info) internal returns (uint) {
+        emit Failure(uint(err), uint(info), 0);
+
+        return uint(err);
+    }
+
+    /**
+      * @dev use this when reporting an opaque error from an upgradeable collaborator contract
+      */
+    function failOpaque(Error err, FailureInfo info, uint opaqueError) internal returns (uint) {
+        emit Failure(uint(err), uint(info), opaqueError);
+
+        return uint(err);
+    }
+}
+
+contract TokenErrorReporter {
+    enum Error {
+        NO_ERROR,
+        UNAUTHORIZED,
+        BAD_INPUT,
+        COMPTROLLER_REJECTION,
+        COMPTROLLER_CALCULATION_ERROR,
+        INTEREST_RATE_MODEL_ERROR,
+        INVALID_ACCOUNT_PAIR,
+        INVALID_CLOSE_AMOUNT_REQUESTED,
+        INVALID_COLLATERAL_FACTOR,
+        MATH_ERROR,
+        MARKET_NOT_FRESH,
+        MARKET_NOT_LISTED,
+        TOKEN_INSUFFICIENT_ALLOWANCE,
+        TOKEN_INSUFFICIENT_BALANCE,
+        TOKEN_INSUFFICIENT_CASH,
+        TOKEN_TRANSFER_IN_FAILED,
+        TOKEN_TRANSFER_OUT_FAILED
+    }
+
+    /*
+     * Note: FailureInfo (but not Error) is kept in alphabetical order
+     *       This is because FailureInfo grows sig",other,3
+"// SPDX-License-Identifier: GPL-2.0-or-later
+
+pragma solidity ^0.8.0;
+
+import ""./Base.sol"";
+
+
+/// @notice Main storage contract for the Euler system
+contract Euler is Base {
+    constructor(address admin, address installerModule) {
+        emit Genesis();
+
+        reentrancyLock = REENTRANCYLOCK__UNLOCKED;
+        upgradeAdmin = admin;
+        governorAdmin = admin;
+
+        moduleLookup[MODULEID__INSTALLER] = installerModule;
+        address installerProxy = _createProxy(MODULEID__INSTALLER);
+        trustedSenders[installerProxy].moduleImpl = installerModule;
+    }
+
+    string public constant name = ""Euler Protocol"";
+
+    /// @notice Lookup the current implementation contract for a module
+    /// @param moduleId Fixed constant that refers to a module type (ie MODULEID__ETOKEN)
+    /// @return An internal address specifies the module's implementation code
+    function moduleIdToImplementation(uint moduleId) external view returns (address) {
+        return moduleLookup[moduleId];
+    }
+
+    /// @notice Lookup a proxy that can be used to interact with a module (only valid for single-proxy modules)
+    /// @param moduleId Fixed constant that refers to a module type (ie MODULEID__MARKETS)
+    /// @return An address that should be cast to the appropriate module interface, ie IEulerMarkets(moduleIdToProxy(2))
+    function moduleIdToProxy(uint moduleId) external view returns (address) {
+        return proxyLookup[moduleId];
+    }
+
+    function dispatch() external {
+        uint32 moduleId = trustedSenders[msg.sender].moduleId;
+        address moduleImpl = trustedSenders[msg.sender].moduleImpl;
+
+        require(moduleId != 0, ""e/sender-not-trusted"");
+
+        if (moduleImpl == address(0)) moduleImpl = moduleLookup[moduleId];
+
+        uint msgDataLength = msg.data.length;
+        require(msgDataLength >= (4 + 4 + 20), ""e/input-too-short"");
+
+        assembly {
+            let payloadSize := sub(calldatasize(), 4)
+            calldatacopy(0, 4, payloadSize)
+            mstore(payloadSize, shl(96, caller()))
+
+            let result := delegatecall(gas(), moduleImpl, 0, add(payloadSize, 20), 0, 0)
+
+            returndatacopy(0, 0, returndatasize())
+
+            switch result
+                case 0 { revert(0, returndatasize()) }
+                default { return(0, returndatasize()) }
+        }
+    }
+}
+
+
+// ===== NEXT FILE =====
+
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+pragma solidity ^0.8.0;
+//import ""hardhat/console.sol""; // DEV_MODE
+
+import ""./Storage.sol"";
+import ""./Events.sol"";
+import ""./Proxy.sol"";
+
+abstract contract Base is Storage, Events {
+    // Modules
+
+    function _createProxy(uint proxyModuleId) internal returns (address) {
+        require(proxyModuleId != 0, ""e/create-proxy/invalid-module"");
+        require(proxyModuleId <= MAX_EXTERNAL_MODULEID, ""e/create-proxy/internal-module"");
+
+        // If we've already created a proxy for a single-proxy module, just return it:
+
+        if (proxyLookup[proxyModuleId] != address(0)) return proxyLooku",other,3

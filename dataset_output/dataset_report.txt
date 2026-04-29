@@ -1,0 +1,95 @@
+=================================================================
+  SMART CONTRACT VULNERABILITY DATASET REPORT
+  Generated : 2026-03-06 15:13:03
+=================================================================
+
+  TOTAL RECORDS    : 376
+  UNIQUE SOURCES   : 16
+  CATEGORIES       : 5
+
+-----------------------------------------------------------------
+  BREAKDOWN BY CATEGORY
+-----------------------------------------------------------------
+
+  [COMMUNITY]  62 records
+    • Chinese hackers used Claude AI to autonomously hack 30 compa...
+    • Coruna-Exploit-Kit: Wie ein staatliches iPhone-Hacking-Werkz...
+    • Root Cause Analysis of Meta-Mode Shifts, Persona Stability, ...
+
+  [HACK_DATABASE]  1 records
+    • Super Sushi Samurai Hack — $4,800,000 stolen
+
+  [NEWS]  250 records
+    • Apple iPhone Hacking Kit Used By Spies, Crypto Scams Could H...
+    • Tether gets a Big Four auditor — but its $189B USDT stableco...
+    • FATF Flags Peer-to-Peer Stablecoin Transfers as Top Money La...
+
+  [RESEARCH]  35 records
+    • Detect Go’s silent arithmetic bugs with go-panikint
+    • Prompt injection to RCE in AI agents
+    • Carelessness versus craftsmanship in cryptography
+
+  [VULNERABILITY_REGISTRY]  28 records
+    • SWC-100: Function Default Visibility
+    • SWC-101: Integer Overflow and Underflow
+    • SWC-102: Outdated Compiler Version
+
+-----------------------------------------------------------------
+  VULNERABILITY TYPES DISTRIBUTION
+-----------------------------------------------------------------
+  unknown                         ████████████████████ 227
+  bridge_hack                     ███ 40
+  flash_loan                      ███ 35
+  logic_error                     █ 20
+  access_control                  █ 14
+  oracle_manipulation             █ 14
+  reentrancy                       7
+  integer_overflow                 6
+  front_running                    4
+  configuration                    4
+  rug_pull                         2
+  denial_of_service                2
+  privacy                          1
+
+-----------------------------------------------------------------
+  TOP SOURCES BY VOLUME
+-----------------------------------------------------------------
+  Google News                     242 records
+  SWC Registry                    28 records
+  Reddit r/defi                   20 records
+  Reddit r/ethdev                 19 records
+  Trail of Bits                   16 records
+  ArXiv                           13 records
+  Reddit r/ethereum               10 records
+  Reddit r/solidity               9 records
+  ArXiv CS.CR                     6 records
+  CryptoBriefing                  4 records
+
+=================================================================
+  DATASET QUALITY NOTES FOR GNN TRAINING
+=================================================================
+
+  CATEGORY PURPOSES:
+  ┌───────────────────────┬────────────────────────────────────┐
+  │ news_articles.csv     │ Real exploit events → positive     │
+  │                       │ training labels (confirmed hacks)  │
+  ├───────────────────────┼────────────────────────────────────┤
+  │ hack_database.csv     │ Structured data with amount, date, │
+  │                       │ vuln type → best labelled data     │
+  ├───────────────────────┼────────────────────────────────────┤
+  │ research_papers.csv   │ Technical patterns → GNN feature   │
+  │                       │ engineering guidance               │
+  ├───────────────────────┼────────────────────────────────────┤
+  │ community_posts.csv   │ Early warnings, informal reports,  │
+  │                       │ post-mortems → supplementary data  │
+  ├───────────────────────┼────────────────────────────────────┤
+  │ swc_registry.csv      │ Official taxonomy → defines the    │
+  │                       │ classification labels for GNN      │
+  └───────────────────────┴────────────────────────────────────┘
+
+  NEXT STEP — Phase 2:
+    Extract Ethereum contract addresses from hack_database.csv
+    and fetch verified Solidity source code from Etherscan API.
+    These source files become the actual GNN training samples.
+
+=================================================================

@@ -1,0 +1,90 @@
+=================================================================
+  SMART CONTRACT HACK NEWS — SCRAPE REPORT  (v3 RSS)
+  Generated : 2026-03-06 13:42:50
+=================================================================
+
+  Total Articles : 205
+  Unique Sources : 3  (CoinTelegraph, Decrypt.co, Google News)
+  Date Range     : 2018-02-27  →  2026-03-06
+
+-----------------------------------------------------------------
+  ARTICLES BY SOURCE
+-----------------------------------------------------------------
+
+  CoinTelegraph  (1 articles)
+    • Solv Protocol offers 10% bounty after $2.7M vault exploit
+      https://cointelegraph.com/news/hacker-steals-nearly-3-million-from-solv-protocol?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+      Date: 2026-03-06  |  Keyword: exploit
+
+  Decrypt.co  (2 articles)
+    • FATF Flags Peer-to-Peer Stablecoin Transfers as Top Money Launder...
+      https://decrypt.co/360087/fatf-flags-peer-to-peer-stablecoin-transfers-as-top-money-laundering-risk
+      Date: 2026-03-05  |  Keyword: smart contract
+    • Apple iPhone Hacking Kit Used By Spies, Crypto Scams Could Have U...
+      https://decrypt.co/359927/apple-iphone-hacking-kit-used-by-spies-crypto-scams-could-have-us-intelligence-origins
+      Date: 2026-03-04  |  Keyword: exploit
+
+  Google News  (202 articles)
+    • OpenAI and Paradigm Launch EVMbench to Test AI Smart Contract Hac...
+      https://news.google.com/rss/articles/CBMiR0FVX3lxTE1vSTV3dXFDZXRjT3NPaWE2SVh4QTlPRmh6N3JWUHoxNmVmLXBKaHNXWHBUREd4NlcwWVdlX0hpM2VRM0JKOU1V?oc=5
+      Date: 2026-03-05  |  Keyword: smart contract
+    • OWASP Reveals Top 10 Smart Contract Vulnerabilities For 2026 - Li...
+      https://news.google.com/rss/articles/CBMikgFBVV95cUxOUWdjYUU1eHJRcVc1QkZXUUtPRUUwS0RiSGM0SjN5Z1NzZ013ZWNvaS00UUNtRTRsbi1idnYxWV90SHFHYzZLLUlKZC1fUVZLdlZkUkx6NHAwcjQzWEdKTnRpWWluSGhWZVRydVpRUVlmR0I4OFJMcG4zNnk2bXB1ZDA0UlFUeFNoT2xoY0xOZERLZw?oc=5
+      Date: 2026-02-24  |  Keyword: smart contract
+    • IoTeX bridge exploit raises debate over losses and recovery prosp...
+      https://news.google.com/rss/articles/CBMitAFBVV95cUxOOW1uZVE2R0prMmNNaExYOGI1UEYwcUhaSVRNQmx2Uk1sUHhoODE2X08zX3RwZm9oOGdLTThCUWhfdlJWRmJpWjJQei1aT1phUGtOVVk3VFBYcjU2VGdOellJT2x1cEtnQnhCdFROblZ3ZUxxajh3bk44TzdPeVFGOFFkT2VEWWI4eE10LVgtQXdjdGxyampwVmNFa0YtOU9vcDdqQkNCYTlEd2o1QW5GbUpaM0w?oc=5
+      Date: 2026-02-23  |  Keyword: exploit
+    • OWASP Smart Contract Top 10 2026 — Security Risks and Vulnerabili...
+      https://news.google.com/rss/articles/CBMicEFVX3lxTE1jVDAza21xTXRJOXpXdzR3dmR4Y2hTaDF0UjBVcVBDMU9kZUZxRzB0OHpEWXRpd3BVQW4xbFZFZFhQQWtweFlSajNVY3Nob09xSHNGa0ZITnpRX3kzSjJoU0FRTzNNZVhLZkI5Q3l6V0LSAXZBVV95cUxOamd4WlhQTWNWbjZLa2VYYzRReTVuTmV1SUwySVBQV2VjbWR0VXFIZ08wQ0ZjbVJWeUp6OWk5OEtqeUtMVnR4VmpiVWFFUzlGS05GWGM0Z0N5YldxaDVYdGZXTnZ1M2MtenZxZlhUVG5EbThVZWVB?oc=5
+      Date: 2026-02-23  |  Keyword: smart contract
+    • IoTeX hit by private key exploit draining around $2 million from ...
+      https://news.google.com/rss/articles/CBMiuAFBVV95cUxOOFd0Q0hvYUp0dk9hdm81SEpWa1pTV0k4SU9pRTZUWEczSksyLUxnUUNwREZrTXZIVkgwcEVRUUNxZlU5bFMtd2c1MmtpUTY1b21MOWYzUEdUOTVzWVhjOGZ3d1l5YWc2bEI1eTF5VW5yXzBhaXk1cVQ5eU5QbzREaDV2YWQ2R0xqclRnNnZOMi1HdFZHNGVkNnQ1TXpxcnJ4SFh2MWlBWkdndjdxT0ZIcThaV210YlNO?oc=5
+      Date: 2026-02-21  |  Keyword: exploit
+      ... and 197 more (see CSV)
+
+-----------------------------------------------------------------
+  KEYWORDS FREQUENCY
+-----------------------------------------------------------------
+  smart contract                  ██████████████████████████████ 80
+  exploit                         ██████████████████████████████ 63
+  flash loan                      ██████████████████████████████ 30
+  defi hack                       ███████████████████████ 23
+  bridge hack                     ██ 2
+  protocol hack                   ██ 2
+  solidity                        ██ 2
+  reentrancy                      ██ 2
+  ethereum hack                   █ 1
+
+=================================================================
+  PROJECT PIPELINE — WHERE THIS DATA FITS
+=================================================================
+
+  PHASE 1  ✅ DONE — Threat Intelligence Dataset
+    → scraped_articles.csv  (this file)
+    → identifies real exploits + vulnerability types
+
+  PHASE 2  NEXT — Extract Contract Addresses
+    → scan article text for '0x...' Ethereum addresses
+    → run: python extract_addresses.py
+
+  PHASE 3  — Fetch Solidity Source Code
+    → use Etherscan API with extracted addresses
+    → run: python etherscan_fetch.py
+
+  PHASE 4  — Build Graphs (CFG / AST / PDG)
+    → parse Solidity → nodes & edges
+    → run: python build_graphs.py
+
+  PHASE 5  — Train GNN Model
+    → label graphs: Vulnerable / Safe
+    → train GCN or GAT classifier
+    → run: python train_gnn.py
+
+  VULNERABILITY TYPES TARGETED:
+    • Reentrancy          (e.g. DAO Hack 2016 — $60M)
+    • Flash Loan Attack   (e.g. bZx, Euler Finance)
+    • Integer Overflow    (arithmetic bugs in tokens)
+    • Access Control      (missing onlyOwner checks)
+    • Oracle Manipulation (price feed attacks)
+
+=================================================================
