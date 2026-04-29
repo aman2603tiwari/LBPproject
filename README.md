@@ -57,17 +57,17 @@ GNNs are architecturally designed to detect patterns in graph structure. Rather 
 ## Pipeline Overview
 
 ```
-Phase 1: Dataset      →  495-row hack database (DeFiHackLabs, ArXiv, Reddit, News)
-Phase 2: Contracts    →  175 labelled .sol files (Etherscan v2 + SmartBugs + SWC)
-Phase 3A: Graphs      →  175 graph JSON files (AST + CFG + PDG per contract)
-Phase 3B: Training    →  175 → 811 augmented graphs → GAT model checkpoint
+Phase 1: Dataset      →  hack database (DeFiHackLabs, ArXiv, Reddit, News)
+Phase 2: Contracts    →  496 labelled .sol files (Etherscan v2 + SmartBugs + SWC)
+Phase 3A: Graphs      →  496 graph JSON files (AST + CFG + PDG per contract)
+Phase 3B: Training    →  496 → 811 augmented graphs → GAT model checkpoint
 Phase 4: Evaluation   →  GNN vs. Slither vs. Mythril comparison report
 ```
 
 | Stage | Script | Key Output |
 |---|---|---|
 | Dataset scraping | `scraper.py`, `hack.py` | `hack_database.csv` (495 rows) |
-| Contract collection | `collect_contracts.py` | 175 `.sol` files |
+| Contract collection | `collect_contracts.py` | 496 `.sol` files |
 | SmartBugs augmentation | `get_smartbugs.py` | +133 contracts |
 | Graph construction | `build_graphs.py` | `graphs/*.json` |
 | Graph augmentation | `augment_graphs.py` | `graphs_augmented/*.json` (811 graphs) |
@@ -101,9 +101,9 @@ Phase 4: Evaluation   →  GNN vs. Slither vs. Mythril comparison report
 
 | Tool | Binary F1 | Macro F1 | Coverage |
 |---|---|---|---|
-| **GNN (ours)** | **0.9375** | **0.8003** | 175/175 |
-| Slither | 0.0135 | 0.0263 | 175/175 |
-| Mythril | 0.0135 | 0.0263 | 175/175 |
+| **GNN (ours)** | **0.9375** | **0.8003** | 496/496 |
+| Slither | 0.0135 | 0.0263 | 496/496 |
+| Mythril | 0.0135 | 0.0263 | 496/496 |
 
 > Slither and Mythril predicted "safe" for **every single contract** in the benchmark. The GNN's version-agnosticism (operating on pre-compiled graphs) is a genuine architectural advantage over tools that require modern Solidity pragma support.
 
@@ -119,7 +119,7 @@ smart-contract-gnn/
 ├── contracts/
 │   ├── vulnerable/                # Labelled vulnerable .sol files
 │   └── safe/                      # Audited safe contracts
-├── graphs/                        # Raw graph JSONs (175 files)
+├── graphs/                        # Raw graph JSONs (496 files)
 ├── graphs_augmented/              # Augmented graphs (811 files)
 ├── models/
 │   ├── gnn_multiclass_best.pt     # Trained GAT checkpoint
@@ -230,7 +230,7 @@ Each node carries a **16-dimensional feature vector** encoding: node type, prese
 ## Dataset
 
 - **495-row hack database** aggregated from DeFiHackLabs (469 records), Google News (428 articles), ArXiv (28 papers), and Reddit (35 posts)
-- **175 labelled Solidity contracts** from Etherscan v2 API (real exploited protocols) and SmartBugs-Curated + SWC Registry (academic benchmarks)
+- **496 labelled Solidity contracts** from Etherscan v2 API (real exploited protocols) and SmartBugs-Curated + SWC Registry (academic benchmarks)
 - **811 training graphs** after class-balanced augmentation (Gaussian noise, feature masking, edge dropout)
 
 | Vulnerability Type | Contracts |
@@ -247,7 +247,7 @@ Each node carries a **16-dimensional feature vector** encoding: node type, prese
 ## Limitations & Future Work
 
 **Current limitations:**
-- 175 real contracts (811 augmented) is small by production ML standards
+- 496 real contracts (811 augmented) is small by production ML standards
 - Regex fallback parser produces lower-quality graphs than full `solc` AST compilation
 - Static analysis only — runtime-dependent exploits (complex flash loan sequences) may not be detectable from code structure alone
 - Single-file analysis; multi-file contracts are concatenated rather than properly resolved
@@ -270,4 +270,4 @@ LBP Project Technical Report.
 
 ---
 
-*Built by Aman Tiwari · LBP Project · 2026*
+*Built by Aman Tiwari, Jheel Maheshwari,Arpit Pandey, Yash Patel · LBP Project · 2026*
